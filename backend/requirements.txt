@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pdfminer.six
+pdfkit
+python-multipart
+fastapi-mail
+jose
+passlib[bcrypt]
+sqlmodel
