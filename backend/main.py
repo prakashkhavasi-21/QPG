@@ -28,7 +28,7 @@ openai.api_base = "https://openrouter.ai/api/v1"
     #wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
 #)
 
-wk_path = os.environ.get("WKHTMLTOPDF_PATH", "wkhtmltopdf")
+wk_path = os.environ.get("WKHTMLTOPDF_PATH", None)
 PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf=wk_path) if wk_path else None
 
 app = FastAPI()
