@@ -30,10 +30,15 @@ PDFKIT_CONFIG = pdfkit.configuration(
 
 app = FastAPI()
 
+origins = [
+    "http://localhost:5173",                          # React dev server
+    "https://qpg-4e99a2de660c.herokuapp.com",         # your deployed React app
+]
+
 # CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
