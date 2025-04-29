@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signInWithPopup
+  signInWithPopup,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import { auth, googleProvider, db } from '../firebase';
 import googleLogo from '../assets/google-logo.png';
@@ -18,6 +19,7 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const [info, setInfo] = useState('');
 
   const handleEmailAuth = async () => {
     setError('');
@@ -64,6 +66,21 @@ export default function AuthPage() {
     }
   };
 
+  const handleForgotPassword = async () => {
+       setError('');
+       setInfo('');
+       if (!email) {
+         setError('Please enter your email address to reset password.');
+         return;
+       }
+       try {
+         await sendPasswordResetEmail(auth, email);
+         setInfo('Password reset email sent! Please check your inbox.');
+       } catch (e) {
+         setError(e.message.replace('Firebase:', '').trim());
+       }
+  };
+
   return (
     <div className="container my-5 pt-5">
       <div className="col-12 col-md-8 col-lg-12 mx-auto">
@@ -97,6 +114,12 @@ export default function AuthPage() {
             <hr className="flex-grow-1" />
           </div>
 
+          {info && (
+           <div className="alert alert-success py-2 text-center">
+             {info}
+           </div>
+         )} 
+
           {/* Error Message */}
           {error && (
             <div className="alert alert-danger py-2 text-center">
@@ -122,7 +145,7 @@ export default function AuthPage() {
               <label className="form-label">Password</label>
               {mode === 'signin' && (
                 <button
-                  onClick={() => {}}
+                  onClick={handleForgotPassword}
                   className="btn btn-link p-0"
                   type="button"
                 >

@@ -312,48 +312,62 @@ async def generate_answer(req: AnswerRequest):
 
 @app.post("/api/upload-question-paper")
 async def upload_question_paper(file: UploadFile = File(...)):
-    # 1) Save the incoming file
+    # 1) Save PDF
     contents = await file.read()
-    temp_path = "uploaded_question_paper.pdf"
-    with open(temp_path, "wb") as f:
+    tmp_path = "uploaded_question_paper.pdf"
+    with open(tmp_path, "wb") as f:
         f.write(contents)
 
     # 2) Extract raw text
     try:
-        raw_text = extract_text(temp_path)
+        raw = extract_text(tmp_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF parse error: {e}")
 
-    # 3) Use OpenAI to pull out **only** the numbered questions
-    #    and skip any instructions/guidelines at the top.
-    system_prompt = """
-        You are an assistant that receives the full text of an exam paper (including
-        instructions, formatting notes, etc.) and must return a JSON array of only the
-        numbered exam questions.  Discard any introductory instructions or guidelines.
-        Each element should be a string *without* the leading “1.”, “2.”, etc.
-        """
+    match = re.search(r'No\.?\s*of\s*Questions\s*[:\-]?\s*(\d+)', raw, flags=re.I)
+    total_q = int(match.group(1)) if match else None
+    # 3) Ask OpenAI to return ONLY the numbered exam questions (JSON array)
+    n_txt = f" The paper states there are {total_q} questions." if total_q else ""
+    system_prompt = f"""
+        You receive the full text of an exam paper (headings, instructions, questions, options, etc.).
+        Your job is to return exactly a JSON object:
+
+        {{"questions": [ ... ]}}
+
+        where each element is one question (or sub-question) in the order it appears.
+        Strip away all numbering (“1.”, “(a)”, etc.) and discard instructions or headings.
+        {n_txt}
+        Return _only_ valid JSON.
+        """.strip()
+    questions = []
     try:
         resp = openai.ChatCompletion.create(
             model="openai/gpt-3.5-turbo",
             messages=[
-                {"role": "system",  "content": system_prompt.strip()},
-                {"role": "user",    "content": raw_text}
+                {"role": "system", "content": system_prompt.strip()},
+                {"role": "user", "content": raw}
             ],
             temperature=0.0,
-            max_tokens=1000
+            max_tokens=1500,
         )
-        ai_content = resp.choices[0].message.content.strip()
-        # Expect the model to respond with something like:
-        # ["What is ...?", "Explain ...", ...]
-        questions = json.loads(ai_content)
-        if not isinstance(questions, list):
-            raise ValueError("OpenAI did not return a JSON list")
-    except Exception as e:
-        # Fallback to regex-splitting if OpenAI fails
-        parts = re.split(r'\n\d+\.\s+', raw_text)
-        questions = [p.strip() for p in parts[1:] if len(p.split()) > 5]
+        arr = json.loads(resp.choices[0].message.content.strip())
+        # Accept any non-empty strings
+        questions = [q.strip() for q in arr if isinstance(q, str) and q.strip()]
+    except Exception:
+        # 4) Fallback: regex-find all `1. …`, `2. …` blocks
+        matches = re.findall(r'\d+\.\s+(.*?)(?=\n\d+\.|\Z)', raw, flags=re.S)
+        questions = [m.strip() for m in matches if m.strip()]
 
-    if not questions:
-        raise HTTPException(status_code=404, detail="No questions found.")
+    
+    # 5) Filter out instructional text
+    instruction_keywords = [
+        "limit", "write", "choose", "answer the following", "prescribed", "guidelines"
+    ]
+    filtered_questions = [
+        q for q in questions
+        if not any(keyword in q.lower() for keyword in instruction_keywords)
+    ]
 
-    return {"questions": questions}
+    if not filtered_questions:
+        raise HTTPException(status_code=404, detail="No valid questions found in the uploaded paper.")
+    return {"questions": filtered_questions}

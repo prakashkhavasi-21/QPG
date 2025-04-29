@@ -32,6 +32,8 @@ export default function ExamGenerator({ user }) {
   const [credits, setCredits] = useState(null);
   const [subscriptionExpires, setSubscriptionExpires] = useState(null);
 
+  const [questionPaperFile, setQuestionPaperFile] = useState(null);
+
   // Reset prompt if user logs in
   useEffect(() => {
     if (user && loginPrompt) {
@@ -181,6 +183,29 @@ export default function ExamGenerator({ user }) {
           setQuestions(aggregated);
           return;
         }
+
+        if (mode === 'questionPaper') {
+          if (!questionPaperFile) {
+            throw new Error("Please upload a question‐paper PDF first.");
+          }
+          // Build form data & call your endpoint
+          const fd = new FormData();
+          fd.append('file', questionPaperFile);
+          const res = await fetch('http://localhost:8001/api/upload-question-paper', {
+            method: 'POST',
+            body: fd,
+          });
+          if (!res.ok) throw new Error("Failed to extract questions from paper.");
+          const { questions: qs } = await res.json();
+          // Wrap into your UI shape:
+          setQuestions(qs.map(q => ({
+            question:    q,
+            showAnswer:  false,
+            answer:      '',
+            loadingAnswer: false
+          })));
+          return;
+        }
       }
       else if (!user) {
         return setLoginPrompt(true);
@@ -251,22 +276,6 @@ export default function ExamGenerator({ user }) {
     }
   };
 
-  const handleUploadQuestionPaper = async e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setError(''); setQuestions([]); setLoading(true);
-    const fd = new FormData(); fd.append('file', file);
-    try {
-      const res  = await fetch('http://localhost:8001/api/upload-question-paper', { method:'POST', body:fd });
-      const { questions: qs } = await res.json();
-      setQuestions(qs.map(q=>({ question:q, showAnswer:false, answer:'', loadingAnswer:false })));
-    } catch(err) {
-      console.error(err);
-      setError('Failed to extract questions');
-    } finally {
-      setLoading(false);
-    }
-  };
 
 
   return (
@@ -341,7 +350,7 @@ export default function ExamGenerator({ user }) {
 
           {/* Mode Selection */}
           <div className="mb-4">
-            {['manual', 'paste', 'multi','questionPaper'].map(m => (
+            {['paste', 'multi','questionPaper'].map(m => (
               <div className="form-check form-check-inline" key={m}>
                 <input
                   className="form-check-input"
@@ -353,14 +362,14 @@ export default function ExamGenerator({ user }) {
                   onChange={() => setMode(m)}
                 />
                 <label className="form-check-label" htmlFor={m}>
-                  {m === 'manual' ? 'General' : m === 'paste' ? 'Enter Your Text' : m === 'multi' ? 'Upload Syllabus' : 'Upload Question Paper'}
+                  {m === 'paste' ? 'Enter Your Text' : m === 'multi' ? 'Upload Syllabus' : 'Upload Question Paper'}
                 </label>
               </div>
             ))}
           </div>
 
           {/* Manual Topics */}
-          {mode === 'manual' && (
+          {/* {mode === 'manual' && (
             <>
               <table className="table table-bordered mb-3">
                 <thead>
@@ -405,7 +414,7 @@ export default function ExamGenerator({ user }) {
                 + Add Topic
               </button>
             </>
-          )}
+          )} */}
 
           {/* Paste Text */}
           {mode === 'paste' && (
@@ -497,20 +506,21 @@ export default function ExamGenerator({ user }) {
           )}
 
             {/* Upload Question Paper */}
-          {mode==='questionPaper' && (
-            <div className="mb-4">
-              <input
-                type="file"
-                accept=".pdf"
-                className="form-control"
-                onChange={handleUploadQuestionPaper}
-              />
-              <small className="text-muted">
-                We will extract *all* questions for you.
-              </small>
-            </div>
-         
-          )}
+            {mode === 'questionPaper' && (
+              <div className="mb-3">
+                <label className="form-label">Upload Question Paper PDF</label>
+                <input
+                  type="file"
+                  accept=".pdf"
+                  className="form-control"
+                  onChange={e => {
+                    setError('');
+                    setQuestions([]);
+                    setQuestionPaperFile(e.target.files[0] || null);
+                  }}
+                />
+              </div>
+            )}
 
           {/* Error */}
           {error && <div className="alert alert-danger">{error}</div>}
@@ -527,7 +537,7 @@ export default function ExamGenerator({ user }) {
 
           {/* Actions */}
           <div className="d-flex gap-2 mb-4">
-            <button className="btn btn-primary" onClick={generate} disabled={loading || mode === 'questionPaper'}>
+            <button className="btn btn-primary" onClick={generate} disabled={loading}>
               {loading ? 'Generating...' : 'Generate Questions'}
             </button>
             {questions.length > 0 && (
