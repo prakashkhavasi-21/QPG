@@ -336,6 +336,7 @@ async def upload_question_paper(file: UploadFile = File(...)):
 
         where each element is one question (or sub-question) in the order it appears.
         Strip away all numbering (“1.”, “(a)”, etc.) and discard instructions or headings.
+        Sub-questions based on passages (labeled (a), (b), (c), etc.)
         {n_txt}
         Return _only_ valid JSON.
         """.strip()
