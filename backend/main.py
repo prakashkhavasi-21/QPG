@@ -24,9 +24,12 @@ openai.api_key = "sk-or-v1-41616fc846ac22bd4a7d19fd10e4ce3ed20e9db12ab3ec209ceb4
 openai.api_base = "https://openrouter.ai/api/v1"
 
 # PDFKit Configuration
-PDFKIT_CONFIG = pdfkit.configuration(
-    wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
-)
+#PDFKIT_CONFIG = pdfkit.configuration(
+    #wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
+#)
+
+wk_path = os.environ.get("WKHTMLTOPDF_PATH", None)
+PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf=wk_path) if wk_path else None
 
 app = FastAPI()
 
