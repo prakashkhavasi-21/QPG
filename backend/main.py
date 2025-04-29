@@ -11,6 +11,17 @@ from fastapi import Depends
 from pydantic import BaseModel
 from typing import Optional
 import razorpay
+from fastapi.staticfiles import StaticFiles
+
+app = FastAPI()
+
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok"}
+
+# Mount React frontend (after API routes)
+app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
+
 
 # RAZORPAY_KEY_ID = "rzp_test_zd5xResUDz8apY"
 # RAZORPAY_KEY_SECRET = "A4gxMDCwI6UCMitXCe12yOi8"
