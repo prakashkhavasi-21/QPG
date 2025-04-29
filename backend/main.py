@@ -19,7 +19,8 @@ RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET')
 razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 # OpenAI API Configuration
-openai.api_key = "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"
+#openai.api_key = "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"
+openai.api_key = "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"
 openai.api_base = "https://openrouter.ai/api/v1"
 
 # PDFKit Configuration
@@ -329,17 +330,27 @@ async def upload_question_paper(file: UploadFile = File(...)):
     # 3) Ask OpenAI to return ONLY the numbered exam questions (JSON array)
     n_txt = f" The paper states there are {total_q} questions." if total_q else ""
     system_prompt = f"""
-        You receive the full text of an exam paper (headings, instructions, questions, options, etc.).
-        Your job is to return exactly a JSON object:
+        You are an assistant that receives the full text of an exam paper (including headings, instructions, passages, and questions).
 
-        {{"questions": [ ... ]}}
+        Your task is to return a JSON object in the following format:
+        {{"questions": ["..."]}}
 
-        where each element is one question (or sub-question) in the order it appears.
-        Strip away all numbering (“1.”, “(a)”, etc.) and discard instructions or headings.
-        Sub-questions based on passages (labeled (a), (b), (c), etc.)
+        Where:
+        - Each item in the "questions" array is a full question or sub-question, in the order it appears.
+        - Include ALL types of questions: 
+        - Standard numbered questions (e.g., "1.", "2.")
+        - Sub-questions from reading passages or comprehension sections (e.g., "(a)", "(b)", etc.)
+        - Fill-in-the-blanks, matching, MCQs, essay questions — everything.
+        - Remove all numbering or lettering ("1.", "(a)", etc.) from each question text.
+        - DO NOT exclude comprehension questions. Questions referring to a passage or text must be included.
+        - DO NOT include general instructions like "Answer any six", "Read the passage", etc.
+        - DO NOT include answers, explanations, or anything outside of the JSON.
+
         {n_txt}
-        Return _only_ valid JSON.
+
+        Return ONLY a valid JSON object. Do not include commentary or markdown.
         """.strip()
+
     questions = []
     try:
         resp = openai.ChatCompletion.create(
@@ -356,8 +367,17 @@ async def upload_question_paper(file: UploadFile = File(...)):
         questions = [q.strip() for q in arr if isinstance(q, str) and q.strip()]
     except Exception:
         # 4) Fallback: regex-find all `1. …`, `2. …` blocks
-        matches = re.findall(r'\d+\.\s+(.*?)(?=\n\d+\.|\Z)', raw, flags=re.S)
-        questions = [m.strip() for m in matches if m.strip()]
+
+        fallback_matches = re.findall(
+            r'(\d+\.\s+.*?(?=\n\d+\.|\Z))|(\([a-z]\)\s+.*?(?=\n\([a-z]\)|\n\d+\.|\Z))',
+            raw,
+            flags=re.S | re.I
+        )
+        questions = [m[0] or m[1] for m in fallback_matches if m[0] or m[1]]
+        #matches = re.findall(r'\d+\.\s+(.*?)(?=\n\d+\.|\Z)', raw, flags=re.S)
+        #questions = [m.strip() for m in matches if m.strip()]
+
+
 
     
     # 5) Filter out instructional text
