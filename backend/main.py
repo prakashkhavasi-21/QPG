@@ -19,8 +19,7 @@ app = FastAPI()
 def health_check():
     return {"status": "ok"}
 
-# Mount React frontend (after API routes)
-app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
+
 
 
 # RAZORPAY_KEY_ID = "rzp_test_zd5xResUDz8apY"
@@ -43,6 +42,8 @@ wk_path = os.environ.get("WKHTMLTOPDF_PATH", None)
 PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf=wk_path) if wk_path else None
 
 app = FastAPI()
+# Mount React frontend (after API routes)
+app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
 
 origins = [
     #"http://localhost:5173",                          # React dev server
