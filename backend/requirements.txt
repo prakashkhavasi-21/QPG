@@ -13,3 +13,4 @@ jinja2
 httpx
 python-dotenv
 razorpay
+setuptools
