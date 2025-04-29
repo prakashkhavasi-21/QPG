@@ -34,6 +34,9 @@ export default function ExamGenerator({ user }) {
 
   const [questionPaperFile, setQuestionPaperFile] = useState(null);
 
+  const API_URL = "http://localhost:8001";
+  //const API_URL = "https://qpg-4e99a2de660c.herokuapp.com";
+
   // Reset prompt if user logs in
   useEffect(() => {
     if (user && loginPrompt) {
@@ -88,7 +91,7 @@ export default function ExamGenerator({ user }) {
     if (!syllabusFile) throw new Error('Please upload a syllabus PDF.');
     const fd = new FormData();
     fd.append('file', syllabusFile);
-    const res = await fetch('http://localhost:8001/api/upload-syllabus', {
+    const res = await fetch(`${API_URL}/api/upload-syllabus`, {
       method: 'POST',
       body: fd,
     });
@@ -129,7 +132,7 @@ export default function ExamGenerator({ user }) {
             shortAnswer: questionTypes.shortAnswer,
             longAnswer: questionTypes.longAnswer
           };
-          const res = await fetch('http://localhost:8001/api/nlp-generate-questions', {
+          const res = await fetch(`${API_URL}/api/nlp-generate-questions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -149,7 +152,7 @@ export default function ExamGenerator({ user }) {
             shortAnswer: questionTypes.shortAnswer,
             longAnswer: questionTypes.longAnswer
           };
-          const res = await fetch('http://localhost:8001/api/nlp-generate-questions', {
+          const res = await fetch(`${API_URL}/api/nlp-generate-questions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -165,7 +168,7 @@ export default function ExamGenerator({ user }) {
           await handleUpload();
           const aggregated = [];
           for (const c of chapterRequests.filter(x => x.selected && x.chapter.trim())) {
-            const res = await fetch('http://localhost:8001/api/nlp-generate-questions-by-chapter', {
+            const res = await fetch(`${API_URL}/api/nlp-generate-questions-by-chapter`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -191,7 +194,7 @@ export default function ExamGenerator({ user }) {
           // Build form data & call your endpoint
           const fd = new FormData();
           fd.append('file', questionPaperFile);
-          const res = await fetch('http://localhost:8001/api/upload-question-paper', {
+          const res = await fetch(`${API_URL}/api/upload-question-paper`, {
             method: 'POST',
             body: fd,
           });
@@ -230,7 +233,7 @@ export default function ExamGenerator({ user }) {
     );
 
     try {
-      const res = await fetch('http://localhost:8001/api/generate-answer', {
+      const res = await fetch(`${API_URL}/api/generate-answer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: qText })
@@ -258,7 +261,7 @@ export default function ExamGenerator({ user }) {
   // --- Download PDF ---
   const downloadPdf = async () => {
     try {
-      const res = await fetch('http://localhost:8001/api/export-pdf', {
+      const res = await fetch(`${API_URL}/api/export-pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ questions }),
