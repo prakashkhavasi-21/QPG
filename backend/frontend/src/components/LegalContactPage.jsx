@@ -1,3 +1,5 @@
+// src/components/LegalContactPage.jsx
+
 import React from 'react';
 
 const tiles = [
@@ -19,11 +21,26 @@ const tiles = [
   {
     title: 'Contact Us',
     content: (
-      <div className="space-y-2">
-        <p>Email: <a href="mailto:qnagenai@gmail.com" className="text-blue-600 underline">sample@gmail.com</a></p>
-        <p>Phone: <a href="tel:+918050903058" className="text-blue-600 underline">+91 8050903058</a></p>
-        <p>Address: Near Padma Hospital, Devaraj Nagar, Terdal - 587315, Karnataka</p>
-        <a href="https://wa.me/918050903058" target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">
+      <div className="space-y-2 text-sm">
+        <p>
+          <strong>Email:</strong>{' '}
+          <a href="mailto:qnagenai@gmail.com" className="text-blue-600 underline">
+            qnagenai@gmail.com
+          </a>
+        </p>
+        <p>
+          <strong>Phone:</strong>{' '}
+          <a href="tel:+918050903058" className="text-blue-600 underline">
+            +91 8050903058
+          </a>
+        </p>
+        <p><strong>Address:</strong> Near Padma Hospital, Devaraj Nagar, Terdal - 587315, Karnataka</p>
+        <a
+          href="https://wa.me/918050903058"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+        >
           📲 Chat on WhatsApp
         </a>
       </div>
@@ -33,11 +50,14 @@ const tiles = [
 
 const LegalContactPage = () => {
   return (
-    <div className="max-w-4xl mx-auto py-10 px-4">
+    <div className="container my-5 pt-5 px-3 md:px-0" style={{ minHeight: '100vh' }}>
       <h1 className="text-3xl font-bold mb-6 text-center">Legal & Contact Information</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {tiles.map((tile, index) => (
-          <div key={index} className="p-6 border rounded shadow hover:shadow-lg transition duration-200 bg-white">
+          <div
+            key={index}
+            className="p-6 border rounded shadow hover:shadow-lg transition duration-200 bg-white break-words"
+          >
             <h2 className="text-xl font-semibold mb-3">{tile.title}</h2>
             <div className="text-gray-700 text-sm space-y-2">{tile.content}</div>
           </div>

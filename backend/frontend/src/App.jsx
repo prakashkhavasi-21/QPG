@@ -31,6 +31,7 @@ export default function App() {
         <Route path="/" element={<ExamGenerator user={user} />} />
         <Route path="/auth" element={user ? <Navigate to="/" replace /> : <AuthPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="/LegalContactPage" element={<LegalContactPage />} />
       </Routes>
       </div>
     </BrowserRouter>
