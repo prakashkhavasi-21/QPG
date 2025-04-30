@@ -267,7 +267,16 @@ async def export_pdf(request: Request):
 
     html += "</ol></body></html>"
 
-    pdf_bytes = pdfkit.from_string(html, False, configuration=PDFKIT_CONFIG)
+        # Add wkhtmltopdf safe options (works on Heroku)
+    options = {
+        'enable-local-file-access': '',
+        'quiet': '',
+        'no-sandbox': '',
+        'disable-gpu': '',
+        'disable-smart-shrinking': '',
+    }
+
+    pdf_bytes = pdfkit.from_string(html, False, configuration=PDFKIT_CONFIG, options=options)
     pdf_path  = "generated_questions.pdf"
     with open(pdf_path, "wb") as f:
         f.write(pdf_bytes)
