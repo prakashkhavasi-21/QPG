@@ -14,3 +14,4 @@ httpx
 python-dotenv
 razorpay
 setuptools
+reportlab>=3.6.0
