@@ -411,12 +411,13 @@ async def upload_question_paper(file: UploadFile = File(...)):
     return {"questions": filtered_questions}
 
 
+# Serve static assets under /static
+app.mount("/static", StaticFiles(directory="frontend/dist/assets"), name="static")
 
-# Mount React frontend (after all API routes)
-app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
+# Catch all React routes
+from fastapi.responses import HTMLResponse
 
-# Catch-all route to support React Router (auth, dashboard etc. refresh)
-@app.get("/{full_path:path}")
-async def catch_all(full_path: str):
+@app.get("/{full_path:path}", response_class=HTMLResponse)
+async def serve_react_app(full_path: str):
     index_path = os.path.join("frontend", "dist", "index.html")
     return FileResponse(index_path)
