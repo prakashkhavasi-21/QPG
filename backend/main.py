@@ -36,8 +36,8 @@ openai.api_base = os.environ.get("OPENAI_API_BASE")
     #wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
 #)
 
-wk_path = os.environ.get("WKHTMLTOPDF_PATH", None)
-PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf=wk_path) if wk_path else None
+# wk_path = os.environ.get("WKHTMLTOPDF_PATH", None)
+# PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf=wk_path) if wk_path else None
 
 
 origins = [
