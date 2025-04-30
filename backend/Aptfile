@@ -1,7 +1,7 @@
 wkhtmltopdf
 libpcre2-16-0
 fontconfig
-libjpeg62-turbo
+libjpeg-turbo8
 libxrender1
 libxtst6
 libx11-6
