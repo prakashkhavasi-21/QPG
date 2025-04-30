@@ -1,8 +1,4 @@
-wkhtmltopdf
-libpcre2-16-0
-fontconfig
-libjpeg-turbo8
-libxrender1
-libxtst6
-libx11-6
-libxext6
+libpango-1.0-0
+libgdk-pixbuf2.0-0
+libffi-dev
+libcairo2

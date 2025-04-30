@@ -232,55 +232,69 @@ async def generate_questions_by_chapter(payload: ChapterIn):
     return {"chapter": chapter, "questions": questions}
 
 
-# --- Export PDF (with answers) ---
-# --- Export PDF (with better answer formatting for code/equations) ---
+# main.py
+
+
+
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.enums import TA_LEFT
+
 @app.post("/api/export-pdf")
 async def export_pdf(request: Request):
     data = await request.json()
     questions = data.get("questions", [])
 
-    html = "<html><head><meta charset='utf-8'></head><body>"
-    html += "<h1>Generated Question Paper</h1><ol>"
+    pdf_path = "generated_questions.pdf"
+    doc = SimpleDocTemplate(pdf_path, pagesize=A4,
+                            rightMargin=40, leftMargin=40,
+                            topMargin=50, bottomMargin=50)
 
-    for q in questions:
+    styles = getSampleStyleSheet()
+    title_style = styles["Title"]
+    question_style = ParagraphStyle(
+        "Question", parent=styles["BodyText"],
+        leftIndent=10, spaceAfter=6,
+    )
+    answer_label = ParagraphStyle(
+        "AnswerLabel", parent=styles["BodyText"],
+        leftIndent=10, fontName="Helvetica-BoldOblique",
+        spaceAfter=4,
+    )
+    answer_style = ParagraphStyle(
+        "Answer", parent=styles["BodyText"],
+        leftIndent=20, textColor="#333333",
+        spaceAfter=12,
+    )
+
+    elements = []
+    elements.append(Paragraph("Generated Question Paper", title_style))
+    elements.append(Spacer(1, 12))
+
+    # questions list
+    q_items = []
+    for idx, q in enumerate(questions, start=1):
         text   = q.get("question", "").replace("\n", "<br/>")
-        answer = q.get("answer", "")
-        marks  = q.get("marks")
+        marks  = q.get("marks", "")
+        q_text = f"{idx}. {text}"
+        if marks:
+            q_text += f"  <i>({marks} marks)</i>"
+        q_items.append(ListItem(Paragraph(q_text, question_style), leftIndent=0))
 
-        html += "<li>"
-        html += f"{text}"
+    elements.append(ListFlowable(q_items, bulletType="1", start="1", leftIndent=0))
+    elements.append(Spacer(1, 12))
 
-        if marks is not None and marks != "":
-            html += f" <em>({marks} marks)</em>"
-
+    # answers
+    for idx, q in enumerate(questions, start=1):
+        raw_answer = q.get("answer")
+        answer = raw_answer.strip() if isinstance(raw_answer, str) else ""
         if answer:
-            html += "<br/><br/>"
-            html += "<strong>Answer:</strong><br/>"
+            elements.append(Paragraph(f"{idx}. Answer:", answer_label))
+            for line in answer.split("\n"):
+                elements.append(Paragraph(line, answer_style))
 
-            # Detect if answer looks like code block (basic check)
-            if "\n" in answer or "    " in answer:  # multi-line or indented
-                html += f"<pre style='background-color:#f4f4f4;padding:10px;border-radius:8px;'>{answer}</pre>"
-            else:
-                html += f"<p>{answer}</p>"
-
-        html += "</li><br/>"
-
-    html += "</ol></body></html>"
-
-        # Add wkhtmltopdf safe options (works on Heroku)
-    options = {
-        'enable-local-file-access': '',
-        'quiet': '',
-        'no-sandbox': '',
-        'disable-gpu': '',
-        'disable-smart-shrinking': '',
-    }
-
-    pdf_bytes = pdfkit.from_string(html, False, configuration=PDFKIT_CONFIG, options=options)
-    pdf_path  = "generated_questions.pdf"
-    with open(pdf_path, "wb") as f:
-        f.write(pdf_bytes)
-
+    doc.build(elements)
     return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_path)
 
 
