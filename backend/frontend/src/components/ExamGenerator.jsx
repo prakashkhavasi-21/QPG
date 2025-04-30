@@ -4,6 +4,8 @@ import { Link, useNavigate  } from 'react-router-dom';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { db }                         from '../firebase';
 import { auth }                       from '../firebase';
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 
 export default function ExamGenerator({ user }) {
@@ -34,8 +36,8 @@ export default function ExamGenerator({ user }) {
 
   const [questionPaperFile, setQuestionPaperFile] = useState(null);
 
-  //const API_URL = "http://localhost:8001";
-  const API_URL = "https://qpg-4e99a2de660c.herokuapp.com";
+  const API_URL = "http://localhost:8001";
+  //const API_URL = "https://qpg-4e99a2de660c.herokuapp.com";
 
   // Reset prompt if user logs in
   useEffect(() => {
@@ -598,7 +600,7 @@ export default function ExamGenerator({ user }) {
                         )}
 
                         {/* show answer if ready */}
-                        {q.showAnswer && (
+                        {/* {q.showAnswer && (
                           <div className="alert alert-success mt-3">
                             <strong>Answer:</strong><br />
                             {q.answer.includes('\n') || q.answer.includes('    ') ? (
@@ -609,7 +611,49 @@ export default function ExamGenerator({ user }) {
                               <p>{q.answer}</p>
                             )}
                           </div>
-                        )}
+                        )} */}
+
+                          {q.showAnswer && (
+                            <div
+                              className="alert alert-success mt-3"
+                              style={{ 
+                                // ensure text wraps and breaks long words/URLs
+                                wordBreak: 'break-word',
+                                whiteSpace: 'pre-wrap',
+                                overflowWrap: 'anywhere'
+                              }}
+                            >
+                              <strong>Answer:</strong>
+                              <ReactMarkdown
+                                // remark-gfm turns “1. X” lines into <ol><li>
+                                remarkPlugins={[remarkGfm]}
+                                // only unwrap code fences to <code> blocks, not rest
+                                components={{
+                                  code({node, inline, className, children, ...props}) {
+                                    if (inline) {
+                                      return <code {...props} className={className}>{children}</code>
+                                    }
+                                    // fenced code block
+                                    return (
+                                      <pre 
+                                        {...props}
+                                        style={{
+                                          backgroundColor: '#d4edda',
+                                          padding: '10px',
+                                          borderRadius: '5px',
+                                          overflowX: 'auto'
+                                        }}
+                                      >
+                                        <code className={className}>{children}</code>
+                                      </pre>
+                                    )
+                                  }
+                                }}
+                              >
+                                {q.answer}
+                              </ReactMarkdown>
+                            </div>
+                          )}
                       </div>
                     </div>
                   );
