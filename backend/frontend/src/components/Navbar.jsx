@@ -14,8 +14,8 @@ export default function Navbar({ user }) {
   const [loadingUserData, setLoadingUserData] = useState(false);
   const [userData, setUserData] = useState(null);
 
-  //const API_URL = "http://localhost:8001";
-  const API_URL = "https://qpg-4e99a2de660c.herokuapp.com";
+  const API_URL = "http://localhost:8001";
+  //const API_URL = "https://qpg-4e99a2de660c.herokuapp.com";
 
   const fetchUserData = async () => {
     if (auth.currentUser) {
@@ -77,7 +77,7 @@ export default function Navbar({ user }) {
             key: "rzp_test_zd5xResUDz8apY", // Replace with your Razorpay Key ID
             amount: data.amount * 100, // Amount in paise
             currency: "INR",
-            name: "QPZ",
+            name: "QnA GenAi",
             description: "Upgrade to Premium Plan",
             order_id: data.order_id,
             handler: async function (response) {
@@ -127,7 +127,7 @@ export default function Navbar({ user }) {
       <nav className="navbar navbar-dark bg-primary fixed-top shadow-sm">
         <div className="container-fluid d-flex justify-content-between align-items-center">
           <Link to="/app" className="navbar-brand fw-bold">
-            QPG
+           QnA genAi
           </Link>
 
           <button
@@ -137,7 +137,7 @@ export default function Navbar({ user }) {
             data-bs-target="#upgradeModal"
             onClick={handleUpgradeClick} // reset login prompt
           >
-            Upgrade to Premium Plan
+            Upgrade Plan
           </button>
 
           {!user ? (

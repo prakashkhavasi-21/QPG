@@ -208,6 +208,12 @@ export default function AuthPage() {
             >
               {mode === 'signin' ? 'Create New Account' : 'Login'}
             </button>
+          </p>        
+        </div>
+        <div>
+          <p className="text-center text-muted small mt-3">
+            By signing up, you agree to our Our Policies<br />
+              <Link to={`/LegalContactPage`} style={{color:'blue'}}>Terms and Conditions</Link> Apply
           </p>
         </div>
       </div>

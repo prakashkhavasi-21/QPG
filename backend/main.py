@@ -29,9 +29,8 @@ RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET')
 razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 # OpenAI API Configuration
-#openai.api_key = "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"
-openai.api_key = "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"
-openai.api_base = "https://openrouter.ai/api/v1"
+openai.api_key = os.environ.get("OPENAI_API_KEY")
+openai.api_base = os.environ.get("OPENAI_API_BASE")
 
 # PDFKit Configuration
 #PDFKIT_CONFIG = pdfkit.configuration(

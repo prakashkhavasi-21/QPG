@@ -7,6 +7,7 @@ import { auth } from './firebase';
 import AuthPage from './components/AuthPage';
 import ExamGenerator from './components/ExamGenerator';
 import Navbar from './components/Navbar'; // 👉 new navbar
+import LegalContactPage from './components/LegalContactPage'; // 👉 new legal contact page
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/" element={<ExamGenerator user={user} />} />
         <Route path="/auth" element={user ? <Navigate to="/" replace /> : <AuthPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="/LegalContactPage" element={<LegalContactPage />} />
       </Routes>
       </div>
     </BrowserRouter>

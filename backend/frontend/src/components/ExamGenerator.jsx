@@ -34,8 +34,8 @@ export default function ExamGenerator({ user }) {
 
   const [questionPaperFile, setQuestionPaperFile] = useState(null);
 
-  //const API_URL = "http://localhost:8001";
-  const API_URL = "https://qpg-4e99a2de660c.herokuapp.com";
+  const API_URL = "http://localhost:8001";
+  //const API_URL = "https://qpg-4e99a2de660c.herokuapp.com";
 
   // Reset prompt if user logs in
   useEffect(() => {
@@ -285,7 +285,7 @@ export default function ExamGenerator({ user }) {
     <div className="container my-5 pt-5">
       <div className="card shadow">
         <div className="card-header">
-          <h4 className="mb-0">Exam &amp; Question Generator ---------------- Credits:<strong>{' '}{credits === null ? '0' : credits}</strong></h4>          
+          <h4 className="mb-0">Generate Questions and Answers</h4>          
           {/* <h4>
           <strong>
             {subscriptionExpires === null
@@ -447,17 +447,16 @@ export default function ExamGenerator({ user }) {
               <table className="table table-bordered mb-3">
                 <thead>
                   <tr>
-                    <th>Select</th>
-                    <th>Topic</th>
+                    <th>#</th>
+                    <th>Topic Name</th>
                     <th>#Q</th>
-                    <th>Marks</th>
                     <th />
                   </tr>
                 </thead>
                 <tbody>
                   {chapterRequests.map(c => (
                     <tr key={c.id}>
-                      <td className="text-center">
+                      <td className="text-center" style={{ width: '10%' }}>
                         <input
                           type="checkbox"
                           className="form-check-input"
@@ -465,7 +464,7 @@ export default function ExamGenerator({ user }) {
                           onChange={e => updateChapter(c.id, 'selected', e.target.checked)}
                         />
                       </td>
-                      <td>
+                      <td style={{ width: '60%' }}>
                         <input
                           type="text"
                           className="form-control"
@@ -474,7 +473,7 @@ export default function ExamGenerator({ user }) {
                           onChange={e => updateChapter(c.id, 'chapter', e.target.value)}
                         />
                       </td>
-                      <td>
+                      <td style={{ width: '25%' }}>
                         <input
                           type="number"
                           className="form-control"
@@ -482,7 +481,7 @@ export default function ExamGenerator({ user }) {
                           onChange={e => updateChapter(c.id, 'numQuestions', e.target.value)}
                         />
                       </td>
-                      <td>
+                      <td style={{ display: 'none' }}>
                         <input
                           type="number"
                           className="form-control"
@@ -490,7 +489,7 @@ export default function ExamGenerator({ user }) {
                           onChange={e => updateChapter(c.id, 'marks', e.target.value)}
                         />
                       </td>
-                      <td className="text-center">
+                      <td className="text-center" style={{ width: '10%' }}>
                         <button
                           className="btn btn-sm btn-outline-danger"
                           onClick={() => removeChapter(c.id)}
