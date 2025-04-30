@@ -14,8 +14,8 @@ export default function Navbar({ user }) {
   const [loadingUserData, setLoadingUserData] = useState(false);
   const [userData, setUserData] = useState(null);
 
-  //const API_URL = "http://localhost:8001";
-  const API_URL = "https://qpg-4e99a2de660c.herokuapp.com";
+  const API_URL = "http://localhost:8001";
+  //const API_URL = "https://qpg-4e99a2de660c.herokuapp.com";
 
   const fetchUserData = async () => {
     if (auth.currentUser) {
