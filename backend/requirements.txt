@@ -14,11 +14,3 @@ httpx
 python-dotenv
 razorpay
 setuptools
-wkhtmltopdf
-libpcre2-16-0
-fontconfig
-libjpeg62-turbo
-libxrender1
-libxtst6
-libx11-6
-libxext6
