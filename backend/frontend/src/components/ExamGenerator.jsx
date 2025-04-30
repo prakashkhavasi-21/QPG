@@ -234,6 +234,8 @@ export default function ExamGenerator({ user }) {
       )
     );
 
+
+
     try {
       const res = await fetch(`${API_URL}/api/generate-answer`, {
         method: 'POST',
@@ -258,6 +260,12 @@ export default function ExamGenerator({ user }) {
         )
       );
     }
+  };
+
+  const collapseAnswer = (idx) => {
+    const updatedQuestions = [...questions];
+    updatedQuestions[idx].showAnswer = false;
+    setQuestions(updatedQuestions);
   };
 
   // --- Download PDF ---
@@ -568,7 +576,7 @@ export default function ExamGenerator({ user }) {
             </div>
           )} */}
 
-            {questions.length > 0 && (
+           {/* {questions.length > 0 && (
               <div className="mt-5">
                 <h5>Generated Questions:</h5>
                 {questions.map((q, idx) => {
@@ -580,7 +588,7 @@ export default function ExamGenerator({ user }) {
                     <div key={idx} className="card mb-3">
                       <div className="card-body">
                         <h6>Q{idx+1}. {lines[0]}</h6>
-                        {/* render MCQ options if present */}
+
                         {isMCQ && lines.slice(1).map((opt,i) => (
                           <div key={i} className="form-check">
                             <input className="form-check-input" type="radio" name={`q${idx}`} />
@@ -588,7 +596,7 @@ export default function ExamGenerator({ user }) {
                           </div>
                         ))}
 
-                        {/* only show Generate Answer button for non-MCQ */}
+
                         {!isMCQ && !q.showAnswer && (
                           <button
                             className="btn btn-sm btn-primary mt-2"
@@ -599,19 +607,7 @@ export default function ExamGenerator({ user }) {
                           </button>
                         )}
 
-                        {/* show answer if ready */}
-                        {/* {q.showAnswer && (
-                          <div className="alert alert-success mt-3">
-                            <strong>Answer:</strong><br />
-                            {q.answer.includes('\n') || q.answer.includes('    ') ? (
-                              <pre style={{ backgroundColor: '#d4edda', padding: '10px', borderRadius: '5px', overflowX: 'auto' }}>
-                                {q.answer}
-                              </pre>
-                            ) : (
-                              <p>{q.answer}</p>
-                            )}
-                          </div>
-                        )} */}
+
 
                           {q.showAnswer && (
                             <div
@@ -655,6 +651,112 @@ export default function ExamGenerator({ user }) {
                             </div>
                           )}
                       </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )} 
+            */}
+            {questions.length > 0 && (
+              <div className="mt-5">
+                <h5>Generated Questions:</h5>
+                {questions.map((q, idx) => {
+                  // Detect MCQ by looking for lines like "A. option"
+                  const lines = q.question.split('\n');
+                  const isMCQ = lines.some(line => /^[A-D][).]\s+/.test(line.trim()));
+
+                  
+
+                  return (
+                    <div key={idx} className="card mb-3">
+                      <div className="card-body">
+                        
+                        {isMCQ ? (
+                          <h6>{lines[0]}</h6>
+                        ):(
+                          <h6>Q{idx + 1}. {lines[0]}</h6>
+                        )}
+
+                        {/* Render MCQ options */}
+                        {isMCQ && (
+                          <div className="mt-2">
+                            {lines.slice(1).map((opt, i) => (
+                              <div key={i} className="form-check">
+                                <input
+                                  className="form-check-input"
+                                  type="radio"
+                                  name={`q${idx}`}
+                                  id={`q${idx}_opt${i}`}
+                                />
+                                <label className="form-check-label" htmlFor={`q${idx}_opt${i}`}>
+                                  {opt}
+                                </label>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                      
+
+                        {/* Render "Generate Answer" button only for non-MCQs */}
+                        {!isMCQ && !q.showAnswer && (
+                          <button
+                            className="btn btn-sm btn-primary mt-2"
+                            onClick={() => generateAnswer(idx)}
+                            disabled={q.loadingAnswer}
+                          >
+                            {q.loadingAnswer ? 'Generating...' : 'Generate Answer'}
+                          </button>
+                        )}
+
+                        {/* Render the answer if available */}
+                        {q.showAnswer && (
+                          <div
+                            className="alert alert-success mt-3"
+                            style={{
+                              wordBreak: 'break-word',
+                              whiteSpace: 'pre-wrap',
+                              overflowWrap: 'anywhere',
+                            }}
+                          >
+                            <strong>Answer:</strong>
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                code({ node, inline, className, children, ...props }) {
+                                  if (inline) {
+                                    return <code {...props} className={className}>{children}</code>;
+                                  }
+                                  return (
+                                    <pre
+                                      {...props}
+                                      style={{
+                                        backgroundColor: '#d4edda',
+                                        padding: '10px',
+                                        borderRadius: '5px',
+                                        overflowX: 'auto',
+                                      }}
+                                    >
+                                      <code className={className}>{children}</code>
+                                    </pre>
+                                  );
+                                },
+                              }}
+                            >
+                              {q.answer}
+                            </ReactMarkdown>
+                          </div>
+                          
+                        )}
+                      </div>
+                      {/* Add the "X" button */}
+                      <button
+                        className="btn btn-sm position-absolute"
+                        style={{ bottom: '2px', right: '2px',backgroundColor: 'orange', color: 'white', border: 'none' }}
+                        onClick={() => collapseAnswer(idx)}
+                      >
+                        X
+                      </button>
                     </div>
                   );
                 })}

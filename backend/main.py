@@ -277,7 +277,7 @@ async def export_pdf(request: Request):
     for idx, q in enumerate(questions, start=1):
         text   = q.get("question", "").replace("\n", "<br/>")
         marks  = q.get("marks", "")
-        q_text = f"{idx}. {text}"
+        q_text = f".{text}"
         if marks:
             q_text += f"  <i>({marks} marks)</i>"
         q_items.append(ListItem(Paragraph(q_text, question_style), leftIndent=0))
