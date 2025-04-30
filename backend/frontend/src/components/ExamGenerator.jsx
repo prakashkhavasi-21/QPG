@@ -750,13 +750,15 @@ export default function ExamGenerator({ user }) {
                         )}
                       </div>
                       {/* Add the "X" button */}
-                      <button
-                        className="btn btn-sm position-absolute"
-                        style={{ bottom: '2px', right: '2px',backgroundColor: 'orange', color: 'white', border: 'none' }}
-                        onClick={() => collapseAnswer(idx)}
-                      >
-                        X
-                      </button>
+                      {!isMCQ && q.showAnswer && (
+                        <button
+                          className="btn btn-sm position-absolute"
+                          style={{ bottom: '2px', right: '2px', backgroundColor: 'orange', color: 'white', border: 'none' }}
+                          onClick={() => collapseAnswer(idx)}
+                        >
+                          X
+                        </button>
+                      )}
                     </div>
                   );
                 })}
