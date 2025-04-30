@@ -41,9 +41,6 @@ openai.api_base = "https://openrouter.ai/api/v1"
 wk_path = os.environ.get("WKHTMLTOPDF_PATH", None)
 PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf=wk_path) if wk_path else None
 
-app = FastAPI()
-# Mount React frontend (after API routes)
-app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
 
 origins = [
     #"http://localhost:5173",                          # React dev server
@@ -412,3 +409,14 @@ async def upload_question_paper(file: UploadFile = File(...)):
     if not filtered_questions:
         raise HTTPException(status_code=404, detail="No valid questions found in the uploaded paper.")
     return {"questions": filtered_questions}
+
+
+
+# Mount React frontend (after all API routes)
+app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
+
+# Catch-all route to support React Router (auth, dashboard etc. refresh)
+@app.get("/{full_path:path}")
+async def catch_all(full_path: str):
+    index_path = os.path.join("frontend", "dist", "index.html")
+    return FileResponse(index_path)
