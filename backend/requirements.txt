@@ -7,7 +7,7 @@ fastapi-mail
 python-jose
 passlib[bcrypt]
 sqlmodel
-openai
+openai==0.28.1
 aiofiles
 jinja2
 httpx
