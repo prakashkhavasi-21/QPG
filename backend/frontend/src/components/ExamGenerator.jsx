@@ -664,7 +664,7 @@ export default function ExamGenerator({ user }) {
                 {questions.map((q, idx) => {
                   // Detect MCQ by looking for lines like "A. option"
                   const lines = q.question.split('\n');
-                  const isMCQ = lines.some(line => /^[A-Da-d][).]\s+/.test(line.trim()));
+                  const isMCQ = lines.some(line => /^[-\s]*[A-Za-z0-9][).]\s+/.test(line.trim()));
 
                   
 
