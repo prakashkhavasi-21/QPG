@@ -10,8 +10,11 @@ const tiles = [
   },
   {
     title: 'Cancellations and Refunds',
-    content: `No cancellations or refunds are permitted after a transaction is completed. 
-    Please review your order carefully before proceeding.`,
+    content: `We understand that sometimes you may need to cancel your subscription. You can cancel your order under the following conditions:
+              To request a cancellation, please contact us immediately at qnagenai@gmail.com or call our support line with your email and valid reason for cancellation.
+              You can cancel your order under the following conditions: you are eligible to cancel the subscription within 1 day of payment done so the user will get refund.
+              If the user cancels the subscription after 1 day of payment, the user will not get any refund.
+              If you have any questions or concerns regarding our cancellation policy, please feel free to reach out to us.`,
   },
   {
     title: 'Privacy Policy',
