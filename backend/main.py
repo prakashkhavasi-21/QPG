@@ -41,6 +41,7 @@ openai.api_base = os.environ.get("OPENAI_API_BASE")
 
 
 origins = [
+    "https://www.qnagenai.com",
     "https://qpg-4e99a2de660c.herokuapp.com",         # your deployed React app
     "http://localhost:5173",                          # React dev server
 ]
