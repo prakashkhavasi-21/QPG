@@ -152,7 +152,7 @@ async def generate_questions(payload: TextIn):
 
     try:
         resp = openai.ChatCompletion.create(
-            model="openai/gpt-3.5-turbo",
+            model="openai/gpt-4-turbo",
             messages=[
                 {"role":"system","content":system_prompt},
                 {"role":"user","content":full_text},
@@ -212,7 +212,7 @@ async def generate_questions_by_chapter(payload: ChapterIn):
     )
     try:
         resp = openai.ChatCompletion.create(
-            model="openai/gpt-3.5-turbo",
+            model="openai/gpt-4-turbo",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user",   "content": chapter_content},
@@ -326,7 +326,7 @@ async def generate_answer(req: AnswerRequest):
 
     try:
         resp = openai.ChatCompletion.create(
-            model="openai/gpt-3.5-turbo",
+            model="openai/gpt-4-turbo",
             messages=[
                 {"role": "system",  "content": system_prompt},
                 {"role": "user",    "content": question},
@@ -393,7 +393,7 @@ async def upload_question_paper(file: UploadFile = File(...)):
     questions = []
     try:
         resp = openai.ChatCompletion.create(
-            model="openai/gpt-3.5-turbo",
+            model="openai/gpt-4-turbo",
             messages=[
                 {"role": "system", "content": system_prompt.strip()},
                 {"role": "user", "content": raw}
