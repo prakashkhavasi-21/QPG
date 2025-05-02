@@ -75,7 +75,7 @@ export default function Navbar({ user }) {
 
         if (data.order_id) {
           const options = {
-            key: "rzp_test_zd5xResUDz8apY", // Replace with your Razorpay Key ID
+            key: "rzp_live_sUjXQAPMu88qE5", // Replace with your Razorpay Key ID
             amount: data.amount * 100, // Amount in paise
             currency: "INR",
             name: "QnA GenAi",

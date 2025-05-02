@@ -212,7 +212,7 @@ export default function AuthPage() {
         </div>
         <div>
           <p className="text-center text-muted small mt-3">
-            By signing up, you agree to our Our Policies<br />
+            By signing up, you agree to our<br />
               <Link to={`/LegalContactPage`} style={{color:'blue'}}>Terms and Conditions</Link> Apply
           </p>
         </div>

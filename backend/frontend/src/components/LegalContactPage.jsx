@@ -5,15 +5,18 @@ import React from 'react';
 const tiles = [
   {
     title: 'Terms and Conditions',
-    content: `By using this platform, you agree to abide by our terms and conditions. 
-    Please use the platform responsibly. We reserve the right to modify or terminate services at any time.`,
+    content: `By using this platform, you agree to abide by our terms and conditions.
+              Please use the platform responsibly. We reserve the right to modify or terminate services at any time.
+              Additionally, please note that since our platform leverages OpenAI GPT-4.0, the information provided is 
+              based on data available up to December 2023. Any content generated may not reflect developments or information 
+              released after that date.`,
   },
   {
     title: 'Cancellations and Refunds',
     content: `We understand that sometimes you may need to cancel your subscription. You can cancel your order under the following conditions:
               To request a cancellation, please contact us immediately at qnagenai@gmail.com or call our support line with your email and valid reason for cancellation.
-              You can cancel your order under the following conditions: you are eligible to cancel the subscription within 1 day of payment done so the user will get refund.
-              If the user cancels the subscription after 1 day of payment, the user will not get any refund.
+              You can cancel your order under the following conditions: you are eligible to cancel the subscription within 24 hours of payment done so the user will get 80% refund.
+              If the user cancels the subscription after 24 hours day of payment, the user will not get any refund.
               If you have any questions or concerns regarding our cancellation policy, please feel free to reach out to us.`,
   },
   {
