@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation, data } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { doc, setDoc, getDoc } from "firebase/firestore";
@@ -186,7 +186,7 @@ export default function Navbar({ user }) {
                 </div>
               )}
 
-              {userData?.subscriptionExpires && (
+              {userData?.subscriptionExpires && userData?.subscriptionExpires.seconds * 1000 > new Date(
                 <div className="alert alert-success d-flex justify-content-between align-items-center">
                   <span>
                     Subscription Active till: <strong>
