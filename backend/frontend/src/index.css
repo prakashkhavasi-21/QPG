@@ -110,19 +110,19 @@ body {
   transform: scale(1.1);
 }
 
-/* Apply to the container you wrap your Markdown in: */
 .answer-container {
-  max-width: 100%;           /* never exceed parent width */
-  overflow-x: hidden;        /* hide any accidental overflow */
-  
-  /* text wrapping rules */
-  word-wrap: break-word;     /* older name, widely supported */
-  overflow-wrap: break-word; /* modern standard */
-  word-break: break-all;     /* break even inside “words” if absolutely needed */
+  /* these may now be redundant with Bootstrap, but keep for safety: */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-all;
+  overflow-x: hidden !important;   /* force‐hide anything that still overflows */
 }
 
-/* For code blocks inside that container, allow only the <pre> to scroll */
+/* make sure pre only ever scrolls itself */
 .answer-container pre {
-  white-space: pre;          /* keep code formatting */
-  overflow-x: auto;          /* only code scrolls horizontally */
+  white-space: pre;
+  overflow-x: auto !important;
+  max-width: 100% !important;
 }
+
+

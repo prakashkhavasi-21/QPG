@@ -526,7 +526,7 @@ export default function ExamGenerator({ user }) {
 
                   return (
                     <div key={idx} className="card mb-3">
-                      <div className="card-body">
+                      <div className="card-body" style={{ overflowX: 'hidden' }}>
                         
                         {isMCQ ? (
                           <h6>{lines[0]}</h6>
@@ -569,7 +569,7 @@ export default function ExamGenerator({ user }) {
                         {/* Render the answer if available */}
                         {q.showAnswer && (
                           <div
-                            className="alert alert-success mt-3 answer-container"
+                            className="alert alert-success mt-3 answer-container text-break mw-100 w-100"
                             style={{
                               maxWidth: '100%',
                               wordBreak: 'break-all',      // forces breaks even inside long strings
@@ -588,7 +588,7 @@ export default function ExamGenerator({ user }) {
                                   return (
                                     <pre
                                       {...props}
-                                      className="p-2 rounded overflow-auto"
+                                      className="p-2 rounded overflow-auto mw-100 text-break"
                                       style={{ backgroundColor: '#d4edda' }}
                                       // style={{
                                       //   backgroundColor: '#d4edda',
@@ -597,7 +597,7 @@ export default function ExamGenerator({ user }) {
                                       //   overflowX: 'auto',
                                       // }}
                                     >
-                                      <code>{children}</code>
+                                      <code className={className}>{children}</code>
                                     </pre>
                                   );
                                 },
