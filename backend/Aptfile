@@ -3,3 +3,7 @@ libgdk-pixbuf2.0-0
 libffi-dev
 libcairo2
 tesseract-ocr
+tesseract-ocr-eng
+libtesseract-dev
+poppler-utils
+build-essential

@@ -9,7 +9,9 @@ const tiles = [
               Please use the platform responsibly. We reserve the right to modify or terminate services at any time.
               Additionally, please note that since our platform leverages OpenAI GPT-4.0, the information provided is 
               based on data available up to December 2023. Any content generated may not reflect developments or information 
-              released after that date.`,
+              released after that date.
+              The platform does not support any regional languages.
+              The platform is intended for educational purposes only. We are not responsible for any misuse of the generated content.`,
   },
   {
     title: 'Cancellations and Refunds',
