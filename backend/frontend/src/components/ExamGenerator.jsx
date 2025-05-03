@@ -293,7 +293,7 @@ export default function ExamGenerator({ user }) {
 
 
   return (
-    <div className="container my-5 pt-5">
+    <div className="container my-5 pt-5" width="100%">
       <div className="card shadow">
         <div className="card-header">
           <h4 className="mb-0">Generate Questions and Answers</h4>          
