@@ -109,3 +109,26 @@ body {
   color: #ffffff;
   transform: scale(1.1);
 }
+
+
+/* Prevent any element from growing past its container */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Hide any stray overflow on the very top level */
+html, body, #root {
+  overflow-x: hidden;
+}
+
+/* Allow code blocks to scroll internally only */
+pre {
+  white-space: pre;
+  overflow-x: auto;
+  max-width: 100%;
+}
