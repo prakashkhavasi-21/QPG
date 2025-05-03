@@ -1,6 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pdfminer.high_level import extract_text
 from pydantic import BaseModel
 import fitz  # PyMuPDF for native text extraction
@@ -23,9 +23,9 @@ import pdfkit
 
 app = FastAPI()
 
-@app.get("/", response_class=HTMLResponse)
-def read_root():
-    return "<h2>Welcome to QnA Generator AI</h2><p>The API is up and running!</p>"
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok"}
 
 
 
