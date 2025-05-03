@@ -363,9 +363,13 @@ async def generate_answer(req: AnswerRequest):
 
 import tempfile
 
+tessdata_dir = os.path.join(os.getcwd(), 'tessdata')
+os.environ['TESSDATA_PREFIX'] = tessdata_dir
+
+
 
 def extract_text_from_pdf(path: str) -> str:
-    # 1) Try native text extraction
+    """ Extract text from PDF — native first, OCR fallback """
     text_chunks = []
     try:
         doc = fitz.open(path)
@@ -378,7 +382,6 @@ def extract_text_from_pdf(path: str) -> str:
 
     full_text = "\n".join(text_chunks).strip()
 
-    # 2) If no native text, fall back to OCR on each page image
     if not full_text:
         print("→ No native text found – falling back to OCR on PDF pages")
         try:
@@ -393,6 +396,7 @@ def extract_text_from_pdf(path: str) -> str:
     return full_text
 
 def extract_text_from_image(path: str) -> str:
+    """ Extract text from image using OCR """
     try:
         img = Image.open(path)
         return pytesseract.image_to_string(img).strip()
@@ -402,9 +406,9 @@ def extract_text_from_image(path: str) -> str:
 
 @app.post("/api/upload-question-paper")
 async def upload_question_paper(file: UploadFile = File(...)):
-    # 1) Save uploaded file temporarily
-    suffix = os.path.splitext(file.filename)[1]
-    if suffix.lower() not in [".pdf", ".jpg", ".jpeg"]:
+    """ Upload PDF/JPEG → Extract Questions → Return JSON """
+    suffix = os.path.splitext(file.filename)[1].lower()
+    if suffix not in [".pdf", ".jpg", ".jpeg"]:
         raise HTTPException(status_code=400, detail="Unsupported file type")
 
     try:
@@ -415,26 +419,23 @@ async def upload_question_paper(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File save error: {e}")
 
-    # 2) Extract text
-    raw = ""
+    # Extract text from file
+    raw_text = ""
     try:
-        if suffix.lower() == ".pdf":
-            raw = extract_text_from_pdf(tmp_path)
+        if suffix == ".pdf":
+            raw_text = extract_text_from_pdf(tmp_path)
         else:
-            raw = extract_text_from_image(tmp_path)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Text extraction error: {e}")
+            raw_text = extract_text_from_image(tmp_path)
     finally:
-        os.remove(tmp_path)  # Always clean up temp file
+        os.remove(tmp_path)
 
-    if not raw:
+    if not raw_text:
         raise HTTPException(status_code=500, detail="Could not extract any text from file.")
 
-    # 3) Try to get total number of questions (optional)
-    match = re.search(r'No\.?\s*of\s*Questions\s*[:\-]?\s*(\d+)', raw, flags=re.I)
+    # Optional: Find "No. of Questions"
+    match = re.search(r'No\.?\s*of\s*Questions\s*[:\-]?\s*(\d+)', raw_text, flags=re.I)
     total_q = int(match.group(1)) if match else None
 
-    # 4) Prompt OpenAI
     n_txt = f" The paper states there are {total_q} questions." if total_q else ""
     system_prompt = f"""
         You are an assistant that receives the full text of an exam paper (including headings, instructions, passages, and questions).
@@ -456,24 +457,24 @@ async def upload_question_paper(file: UploadFile = File(...)):
     questions = []
     try:
         resp = openai.ChatCompletion.create(
-            model="gpt-4-turbo",
+            model="openai/gpt-4-turbo",
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": raw}
+                {"role": "user", "content": raw_text}
             ],
             temperature=0.0,
             max_tokens=1500,
         )
         resp_content = resp.choices[0].message.content.strip()
         obj = json.loads(resp_content)
-        questions = [q.strip() for q in obj["questions"] if isinstance(q, str) and q.strip()]
+        questions = [q.strip() for q in obj.get("questions", []) if isinstance(q, str) and q.strip()]
     except Exception as e:
         print(f"[OpenAI parse fallback] {e}")
 
-        # Fallback regex
+        # Fallback regex (numbered or lettered questions)
         fallback_matches = re.findall(
             r'(\d+\.\s+.*?(?=\n\d+\.|\Z))|(\([a-z]\)\s+.*?(?=\n\([a-z]\)|\n\d+\.|\Z))',
-            raw,
+            raw_text,
             flags=re.S | re.I
         )
         questions = [m[0] or m[1] for m in fallback_matches if m[0] or m[1]]
