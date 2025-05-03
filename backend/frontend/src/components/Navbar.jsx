@@ -186,7 +186,7 @@ export default function Navbar({ user }) {
                 </div>
               )}
 
-              {userData?.subscriptionExpires && userData?.subscriptionExpires.seconds * 1000 > new Date(
+              {userData?.subscriptionExpires && (new Date(userData.subscriptionExpires.seconds * 1000) > new Date(Date.now())) && (
                 <div className="alert alert-success d-flex justify-content-between align-items-center">
                   <span>
                     Subscription Active till: <strong>
