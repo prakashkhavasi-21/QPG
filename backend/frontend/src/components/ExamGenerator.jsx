@@ -37,8 +37,8 @@ export default function ExamGenerator({ user }) {
   const [questionPaperFile, setQuestionPaperFile] = useState(null);
 
   //const API_URL = "http://localhost:8001";
-  const API_URL = "https://qpg-4e99a2de660c.herokuapp.com";
-  //const API_URL = "https://www.qnagenai.com";
+  //const API_URL = "https://qpg-4e99a2de660c.herokuapp.com";
+  const API_URL = "https://www.qnagenai.com";
 
   // Reset prompt if user logs in
   useEffect(() => {
@@ -382,53 +382,7 @@ export default function ExamGenerator({ user }) {
             ))}
           </div>
 
-          {/* Manual Topics */}
-          {/* {mode === 'manual' && (
-            <>
-              <table className="table table-bordered mb-3">
-                <thead>
-                  <tr>
-                    <th>Topic</th>
-                    <th>Marks</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {topics.map(t => (
-                    <tr key={t.id}>
-                      <td>
-                        <input
-                          type="text"
-                          className="form-control"
-                          value={t.name}
-                          onChange={e => updateTopic(t.id, 'name', e.target.value)}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          className="form-control"
-                          value={t.marks}
-                          onChange={e => updateTopic(t.id, 'marks', e.target.value)}
-                        />
-                      </td>
-                      <td className="text-center">
-                        <button
-                          className="btn btn-sm btn-outline-danger"
-                          onClick={() => removeTopic(t.id)}
-                        >
-                          &times;
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <button className="btn btn-sm btn-success mb-4" onClick={addTopic}>
-                + Add Topic
-              </button>
-            </>
-          )} */}
+          
 
           {/* Paste Text */}
           {mode === 'paste' && (
@@ -560,104 +514,6 @@ export default function ExamGenerator({ user }) {
             )}
           </div>
 
-          {/* Generated Questions */}
-          {/* {questions.length > 0 && (
-            <div>
-              <h5>Generated Questions</h5>
-              <ul className="list-group">
-                {questions.map((q, i) => (
-                  <li className="list-group-item" key={i}>
-                    {q.question}
-                    {q.marks != null &&  (
-                      <span className="badge bg-secondary ms-2">{q.marks} marks</span>
-                    )} 
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )} */}
-
-           {/* {questions.length > 0 && (
-              <div className="mt-5">
-                <h5>Generated Questions:</h5>
-                {questions.map((q, idx) => {
-                  // Detect MCQ by looking for lines like "A. option"
-                  const lines = q.question.split('\n');
-                  const isMCQ = lines.some(line => /^[A-D]\.\s+/.test(line.trim()));
-
-                  return (
-                    <div key={idx} className="card mb-3">
-                      <div className="card-body">
-                        <h6>Q{idx+1}. {lines[0]}</h6>
-
-                        {isMCQ && lines.slice(1).map((opt,i) => (
-                          <div key={i} className="form-check">
-                            <input className="form-check-input" type="radio" name={`q${idx}`} />
-                            <label className="form-check-label">{opt}</label>
-                          </div>
-                        ))}
-
-
-                        {!isMCQ && !q.showAnswer && (
-                          <button
-                            className="btn btn-sm btn-primary mt-2"
-                            onClick={() => generateAnswer(idx)}
-                            disabled={q.loadingAnswer}
-                          >
-                            {q.loadingAnswer ? 'Generating...' : 'Generate Answer'}
-                          </button>
-                        )}
-
-
-
-                          {q.showAnswer && (
-                            <div
-                              className="alert alert-success mt-3"
-                              style={{ 
-                                // ensure text wraps and breaks long words/URLs
-                                wordBreak: 'break-word',
-                                whiteSpace: 'pre-wrap',
-                                overflowWrap: 'anywhere'
-                              }}
-                            >
-                              <strong>Answer:</strong>
-                              <ReactMarkdown
-                                // remark-gfm turns “1. X” lines into <ol><li>
-                                remarkPlugins={[remarkGfm]}
-                                // only unwrap code fences to <code> blocks, not rest
-                                components={{
-                                  code({node, inline, className, children, ...props}) {
-                                    if (inline) {
-                                      return <code {...props} className={className}>{children}</code>
-                                    }
-                                    // fenced code block
-                                    return (
-                                      <pre 
-                                        {...props}
-                                        style={{
-                                          backgroundColor: '#d4edda',
-                                          padding: '10px',
-                                          borderRadius: '5px',
-                                          overflowX: 'auto'
-                                        }}
-                                      >
-                                        <code className={className}>{children}</code>
-                                      </pre>
-                                    )
-                                  }
-                                }}
-                              >
-                                {q.answer}
-                              </ReactMarkdown>
-                            </div>
-                          )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )} 
-            */}
             {questions.length > 0 && (
               <div className="mt-5">
                 <h5>Generated Questions:</h5>
