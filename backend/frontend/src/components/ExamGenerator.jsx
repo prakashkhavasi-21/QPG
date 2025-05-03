@@ -571,6 +571,8 @@ export default function ExamGenerator({ user }) {
                           <div
                             className="alert alert-success mt-3"
                             style={{
+                              maxWidth: '100%',
+                              width: '100%',
                               wordBreak: 'break-word',
                               whiteSpace: 'pre-wrap',
                               overflowWrap: 'anywhere',
@@ -587,11 +589,12 @@ export default function ExamGenerator({ user }) {
                                   return (
                                     <pre
                                       {...props}
+                                      className="p-2 rounded overflow-auto"
                                       style={{
                                         backgroundColor: '#d4edda',
                                         padding: '10px',
-                                        borderRadius: '5px',
-                                        overflowX: 'auto',
+                                        borderRadius: '2px',
+                                        //overflowX: 'auto',
                                       }}
                                     >
                                       <code className={className}>{children}</code>
