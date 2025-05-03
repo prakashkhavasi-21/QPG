@@ -569,13 +569,13 @@ export default function ExamGenerator({ user }) {
                         {/* Render the answer if available */}
                         {q.showAnswer && (
                           <div
-                            className="alert alert-success mt-3"
+                            className="alert alert-success mt-3 react-markdown"
                             style={{
                               maxWidth: '100%',
                               width: '100%',
                               wordBreak: 'break-word',
                               whiteSpace: 'pre-wrap',
-                              overflowWrap: 'anywhere',
+                              overflowWrap: 'break-word',
                             }}
                           >
                             <strong>Answer:</strong>
@@ -590,12 +590,13 @@ export default function ExamGenerator({ user }) {
                                     <pre
                                       {...props}
                                       className="p-2 rounded overflow-auto"
-                                      style={{
-                                        backgroundColor: '#d4edda',
-                                        padding: '10px',
-                                        borderRadius: '2px',
-                                        //overflowX: 'auto',
-                                      }}
+                                      style={{ backgroundColor: '#d4edda' }}
+                                      // style={{
+                                      //   backgroundColor: '#d4edda',
+                                      //   padding: '10px',
+                                      //   borderRadius: '2px',
+                                      //   overflowX: 'auto',
+                                      // }}
                                     >
                                       <code className={className}>{children}</code>
                                     </pre>

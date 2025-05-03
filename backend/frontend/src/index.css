@@ -109,3 +109,8 @@ body {
   color: #ffffff;
   transform: scale(1.1);
 }
+
+.react-markdown pre {
+  white-space: pre;         /* preserve formatting of code blocks */
+  overflow-x: auto;         /* scroll if code is too wide */
+}
