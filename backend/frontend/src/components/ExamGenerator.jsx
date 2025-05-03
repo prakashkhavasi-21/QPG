@@ -526,7 +526,7 @@ export default function ExamGenerator({ user }) {
 
                   return (
                     <div key={idx} className="card mb-3">
-                      <div className="card-body" style={{ overflowX: 'hidden' }}>
+                      <div className="card-body">
                         
                         {isMCQ ? (
                           <h6>{lines[0]}</h6>
@@ -569,10 +569,10 @@ export default function ExamGenerator({ user }) {
                         {/* Render the answer if available */}
                         {q.showAnswer && (
                           <div
-                            className="alert alert-success mt-3 answer-container text-break mw-100 w-100"
+                            className="alert alert-success mt-3 text-break mw-100 w-100"
                             style={{
                               maxWidth: '100%',
-                              wordBreak: 'break-all',      // forces breaks even inside long strings
+                              wordBreak: 'break-word',      // forces breaks even inside long strings
                               overflowWrap: 'break-word',  // wrap at word boundaries when possible
                               whiteSpace: 'pre-wrap',      // preserve manual line breaks
                             }}
@@ -588,14 +588,16 @@ export default function ExamGenerator({ user }) {
                                   return (
                                     <pre
                                       {...props}
-                                      className="p-2 rounded overflow-auto mw-100 text-break"
-                                      style={{ backgroundColor: '#d4edda' }}
-                                      // style={{
-                                      //   backgroundColor: '#d4edda',
-                                      //   padding: '10px',
-                                      //   borderRadius: '2px',
-                                      //   overflowX: 'auto',
-                                      // }}
+                                      className="p-2 rounded overflow-auto text-break"
+                                      style={{
+                                        backgroundColor: '#d4edda',
+                                        padding: '5px',
+                                        borderRadius: '4px',
+                                        overflowX: 'auto',
+                                        maxWidth: '100%',
+                                        overflowX: 'auto',
+                                        wordBreak: 'pre-wrap',
+                                      }}
                                     >
                                       <code className={className}>{children}</code>
                                     </pre>

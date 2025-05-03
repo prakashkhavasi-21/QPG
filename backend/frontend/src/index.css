@@ -109,38 +109,3 @@ body {
   color: #ffffff;
   transform: scale(1.1);
 }
-
-.answer-container {
-  /* these may now be redundant with Bootstrap, but keep for safety: */
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  word-break: break-all;
-  overflow-x: hidden !important;   /* force‐hide anything that still overflows */
-}
-
-/* make sure pre only ever scrolls itself */
-.answer-container pre {
-  white-space: pre;
-  overflow-x: auto !important;
-  max-width: 100% !important;
-}
-
-/* src/index.css */
-
-/* 1. Make sure nothing ever grows past the viewport */
-html,  
-body {
-  overflow-x: hidden;        /* absolutely hide any horizontal scroll */
-  width: 100%;               /* cap at 100% of the viewport */
-  box-sizing: border-box;    /* ensure padding/borders don’t add width */
-}
-
-/* 2. If you still want to break long words *anywhere* */
-*,
-*::before,
-*::after {
-  overflow-wrap: break-word;
-  word-wrap: break-word;
-}
-
-
