@@ -83,7 +83,7 @@ export default function AuthPage() {
 
   return (
     <div className="container my-5 pt-5">
-      <div className="col-12 col-md-8 col-lg-12 mx-auto">
+      <div className="col-12 col-md-8 col-lg-4 mx-auto">
         <div className="card p-4 shadow">
           <div className="text-center mb-4">
             <h2 className="fw-bold">
