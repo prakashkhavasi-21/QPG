@@ -571,7 +571,7 @@ export default function ExamGenerator({ user }) {
                           <div
                             className="alert alert-success mt-3 text-break mw-100 w-100"
                             style={{
-                              maxWidth: '100%',
+                              maxWidth: '80%',
                               wordBreak: 'break-word',      // forces breaks even inside long strings
                               overflowWrap: 'break-word',  // wrap at word boundaries when possible
                               whiteSpace: 'pre-wrap',      // preserve manual line breaks
@@ -594,7 +594,7 @@ export default function ExamGenerator({ user }) {
                                         padding: '5px',
                                         borderRadius: '4px',
                                         overflowX: 'auto',
-                                        maxWidth: '100%',
+                                        maxWidth: '80%',
                                         overflowX: 'auto',
                                         wordBreak: 'pre-wrap',
                                       }}

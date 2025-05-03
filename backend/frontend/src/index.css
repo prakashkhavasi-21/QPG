@@ -130,5 +130,5 @@ html, body, #root {
 pre {
   white-space: pre;
   overflow-x: auto;
-  max-width: 100%;
+  max-width: 80%;
 }
