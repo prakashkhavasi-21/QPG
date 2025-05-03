@@ -524,7 +524,7 @@ export default function ExamGenerator({ user }) {
                 <label className="form-label">Upload Question Paper PDF</label>
                 <input
                   type="file"
-                  accept=".pdf"
+                  accept=".pdf, .jpg, .jpeg"
                   className="form-control"
                   onChange={e => {
                     setError('');

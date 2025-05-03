@@ -3,11 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pdfminer.high_level import extract_text
 from pydantic import BaseModel
-import fitz  # PyMuPDF for native text extraction
-from pdf2image import convert_from_path
-import pdfplumber
-from PIL import Image
-import pytesseract
+import pdfkit
 import openai
 import os
 import re
@@ -16,10 +12,6 @@ from pydantic import BaseModel
 from typing import Optional
 import razorpay
 from fastapi.staticfiles import StaticFiles
-import json
-import io
-import pdfkit
-
 
 app = FastAPI()
 
@@ -114,12 +106,9 @@ async def upload_syllabus(file: UploadFile = File(...)):
     with open(TEMP_PDF, "wb") as f:
         f.write(contents)
     try:
-        text = extract_text_from_pdf(TEMP_PDF)
-        if not text:
-            raise Exception("No extractable text found in PDF (native + OCR).")
+        text = extract_text(TEMP_PDF)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"PDF text extraction failed: {e}")
-
+        raise HTTPException(status_code=500, detail=f"PDF parse error: {e}")
     with open(SYLLABUS_TXT, "w", encoding="utf-8") as f:
         f.write(text)
     return {"text": text}
@@ -361,80 +350,23 @@ async def generate_answer(req: AnswerRequest):
 
 # … your existing imports and setup …
 
-import tempfile
-
-
-def extract_text_from_pdf(path: str) -> str:
-    # 1) Try native text extraction
-    text_chunks = []
-    try:
-        doc = fitz.open(path)
-        for page in doc:
-            chunk = page.get_text()
-            if chunk:
-                text_chunks.append(chunk)
-    except Exception as e:
-        print(f"[native PDF extract] error: {e}")
-
-    full_text = "\n".join(text_chunks).strip()
-
-    # 2) If no native text, fall back to OCR on each page image
-    if not full_text:
-        print("→ No native text found – falling back to OCR on PDF pages")
-        try:
-            pages = convert_from_path(path, dpi=300)
-            ocr_texts = []
-            for img in pages:
-                ocr_texts.append(pytesseract.image_to_string(img))
-            full_text = "\n".join(ocr_texts).strip()
-        except Exception as e:
-            print(f"[PDF OCR] error: {e}")
-
-    return full_text
-
-def extract_text_from_image(path: str) -> str:
-    try:
-        img = Image.open(path)
-        return pytesseract.image_to_string(img).strip()
-    except Exception as e:
-        print(f"[image OCR] error: {e}")
-        return ""
-
 @app.post("/api/upload-question-paper")
 async def upload_question_paper(file: UploadFile = File(...)):
-    # 1) Save uploaded file temporarily
-    suffix = os.path.splitext(file.filename)[1]
-    if suffix.lower() not in [".pdf", ".jpg", ".jpeg"]:
-        raise HTTPException(status_code=400, detail="Unsupported file type")
+    # 1) Save PDF
+    contents = await file.read()
+    tmp_path = "uploaded_question_paper.pdf"
+    with open(tmp_path, "wb") as f:
+        f.write(contents)
 
+    # 2) Extract raw text
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            contents = await file.read()
-            tmp.write(contents)
-            tmp_path = tmp.name
+        raw = extract_text(tmp_path)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"File save error: {e}")
+        raise HTTPException(status_code=500, detail=f"PDF parse error: {e}")
 
-    # 2) Extract text
-    raw = ""
-    try:
-        if suffix.lower() == ".pdf":
-            raw = extract_text_from_pdf(tmp_path)
-        else:
-            raw = extract_text_from_image(tmp_path)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Text extraction error: {e}")
-    finally:
-        os.remove(tmp_path)  # Always clean up temp file
-
-    if not raw:
-        raise HTTPException(status_code=500, detail="Could not extract any text from file.")
-
-    # 3) Try to get total number of questions (optional)
     match = re.search(r'No\.?\s*of\s*Questions\s*[:\-]?\s*(\d+)', raw, flags=re.I)
     total_q = int(match.group(1)) if match else None
-
-    # 4) Prompt OpenAI
+    # 3) Ask OpenAI to return ONLY the numbered exam questions (JSON array)
     n_txt = f" The paper states there are {total_q} questions." if total_q else ""
     system_prompt = f"""
         You are an assistant that receives the full text of an exam paper (including headings, instructions, passages, and questions).
@@ -444,41 +376,69 @@ async def upload_question_paper(file: UploadFile = File(...)):
 
         Where:
         - Each item in the "questions" array is a full question or sub-question, in the order it appears.
-        - Include ALL types of questions.
+        - Include ALL types of questions: 
+        - Standard numbered questions (e.g., "1.", "2.")
+        - Sub-questions from reading passages or comprehension sections (e.g., "(a)", "(b)", etc.)
+        - Fill-in-the-blanks, matching, MCQs, essay questions — everything.
         - Remove all numbering or lettering ("1.", "(a)", etc.) from each question text.
-        - DO NOT include general instructions or answers.
+        - DO NOT exclude comprehension questions. Questions referring to a passage or text must be included.
+        - DO NOT include general instructions like "Answer any six", "Read the passage", etc.
+        - DO NOT include answers, explanations, or anything outside of the JSON.
 
         {n_txt}
 
         Return ONLY a valid JSON object. Do not include commentary or markdown.
-    """.strip()
+        """.strip()
 
     questions = []
     try:
         resp = openai.ChatCompletion.create(
-            model="gpt-4-turbo",
+            model="openai/gpt-4-turbo",
             messages=[
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": system_prompt.strip()},
                 {"role": "user", "content": raw}
             ],
             temperature=0.0,
             max_tokens=1500,
         )
-        resp_content = resp.choices[0].message.content.strip()
-        obj = json.loads(resp_content)
-        questions = [q.strip() for q in obj["questions"] if isinstance(q, str) and q.strip()]
-    except Exception as e:
-        print(f"[OpenAI parse fallback] {e}")
+        arr = json.loads(resp.choices[0].message.content.strip())
+        # Accept any non-empty strings
+        questions = [q.strip() for q in arr if isinstance(q, str) and q.strip()]
+    except Exception:
+        # 4) Fallback: regex-find all `1. …`, `2. …` blocks
 
-        # Fallback regex
         fallback_matches = re.findall(
             r'(\d+\.\s+.*?(?=\n\d+\.|\Z))|(\([a-z]\)\s+.*?(?=\n\([a-z]\)|\n\d+\.|\Z))',
             raw,
             flags=re.S | re.I
         )
         questions = [m[0] or m[1] for m in fallback_matches if m[0] or m[1]]
+        #matches = re.findall(r'\d+\.\s+(.*?)(?=\n\d+\.|\Z)', raw, flags=re.S)
+        #questions = [m.strip() for m in matches if m.strip()]
 
-    if not questions:
-        raise HTTPException(status_code=500, detail="Could not extract questions from paper.")
 
-    return {"questions": questions}
+
+    
+    # 5) Filter out instructional text
+    instruction_keywords = [
+        "limit", "write", "choose", "answer the following", "prescribed", "guidelines"
+    ]
+    filtered_questions = [
+        q for q in questions
+        if not any(keyword in q.lower() for keyword in instruction_keywords)
+    ]
+
+    if not filtered_questions:
+        raise HTTPException(status_code=404, detail="No valid questions found in the uploaded paper.")
+    return {"questions": filtered_questions}
+
+
+# Serve static assets under /static
+app.mount("/static", StaticFiles(directory="frontend/dist", html=True), name="static")
+
+# Catch all React routes
+from fastapi.responses import HTMLResponse
+
+@app.get("/{full_path:path}")
+async def serve_react_app():
+    return HTMLResponse(open("frontend/dist/index.html").read())
