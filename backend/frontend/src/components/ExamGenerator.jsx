@@ -526,7 +526,7 @@ export default function ExamGenerator({ user }) {
 
                   return (
                     <div key={idx} className="card mb-3">
-                      <div className="card-body">
+                      <div className="card-body" style={{ overflowX: 'hidden' }}>
                         
                         {isMCQ ? (
                           <h6>{lines[0]}</h6>
@@ -567,11 +567,11 @@ export default function ExamGenerator({ user }) {
                         )}
 
                         {/* Render the answer if available */}
-                        {q.showAnswer && (
+                        {/* {q.showAnswer && (
                           <div
                             className="alert alert-success mt-3 text-break mw-100 w-100"
                             style={{
-                              maxWidth: '80%',
+                              maxWidth: '100%',
                               wordBreak: 'break-word',      // forces breaks even inside long strings
                               overflowWrap: 'break-word',  // wrap at word boundaries when possible
                               whiteSpace: 'pre-wrap',      // preserve manual line breaks
@@ -594,7 +594,7 @@ export default function ExamGenerator({ user }) {
                                         padding: '5px',
                                         borderRadius: '4px',
                                         overflowX: 'auto',
-                                        maxWidth: '80%',
+                                        maxWidth: '100%',
                                         overflowX: 'auto',
                                         wordBreak: 'pre-wrap',
                                       }}
@@ -609,6 +609,29 @@ export default function ExamGenerator({ user }) {
                             </ReactMarkdown>
                           </div>
                           
+                        )} */}
+
+                        {q.showAnswer && (
+                          <div className="alert alert-success mt-3 answer-container">
+                            <strong>Answer:</strong>
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                code({ inline, className, children, ...props }) {
+                                  if (inline) {
+                                    return <code {...props} className={className}>{children}</code>;
+                                  }
+                                  return (
+                                    <pre {...props}>
+                                      <code className={className}>{children}</code>
+                                    </pre>
+                                  );
+                                }
+                              }}
+                            >
+                              {q.answer}
+                            </ReactMarkdown>
+                          </div>
                         )}
                       </div>
                       {/* Add the "X" button */}

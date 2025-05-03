@@ -124,11 +124,25 @@ body {
 /* Hide any stray overflow on the very top level */
 html, body, #root {
   overflow-x: hidden;
+  width: 100%;
 }
 
 /* Allow code blocks to scroll internally only */
 pre {
   white-space: pre;
   overflow-x: auto;
-  max-width: 80%;
+  max-width: 100%;
+}
+
+.answer-container pre,
+.answer-container code {
+  white-space: pre-wrap !important;
+  word-break: break-all !important;
+  overflow-x: hidden !important;
+}
+
+.answer-container pre {
+  padding: 0.5rem;
+  background-color: #d4edda;
+  border-radius: 0.25rem;
 }
