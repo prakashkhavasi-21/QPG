@@ -37,8 +37,8 @@ export default function ExamGenerator({ user }) {
   const [questionPaperFile, setQuestionPaperFile] = useState(null);
 
   //const API_URL = "http://localhost:8001";
-  //const API_URL = "https://qpg-4e99a2de660c.herokuapp.com";
-  const API_URL = "https://www.qnagenai.com";
+  const API_URL = "https://qpg-4e99a2de660c.herokuapp.com";
+  //const API_URL = "https://www.qnagenai.com";
 
   // Reset prompt if user logs in
   useEffect(() => {
