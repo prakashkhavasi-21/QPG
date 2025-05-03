@@ -131,7 +131,7 @@ html, body, #root {
 pre {
   white-space: pre;
   overflow-x: auto;
-  max-width: 100%;
+  max-width: 80%;
 }
 
 .answer-container pre,
@@ -142,7 +142,7 @@ pre {
 }
 
 .answer-container pre {
-  padding: 0.5rem;
+  padding: 10px;
   background-color: #d4edda;
   border-radius: 0.25rem;
 }
