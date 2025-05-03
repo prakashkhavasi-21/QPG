@@ -475,7 +475,7 @@ export default function ExamGenerator({ user }) {
             {/* Upload Question Paper */}
             {mode === 'questionPaper' && (
               <div className="mb-3">
-                <label className="form-label">Upload Question Paper PDF</label>
+                <label className="form-label">Upload Question Paper pdf/jpg/jpeg</label>
                 <input
                   type="file"
                   accept=".pdf, .jpg, .jpeg"
