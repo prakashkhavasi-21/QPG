@@ -125,4 +125,22 @@ body {
   max-width: 100% !important;
 }
 
+/* src/index.css */
+
+/* 1. Make sure nothing ever grows past the viewport */
+html,  
+body {
+  overflow-x: hidden;        /* absolutely hide any horizontal scroll */
+  width: 100%;               /* cap at 100% of the viewport */
+  box-sizing: border-box;    /* ensure padding/borders don’t add width */
+}
+
+/* 2. If you still want to break long words *anywhere* */
+*,
+*::before,
+*::after {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
 
