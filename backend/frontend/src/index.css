@@ -110,7 +110,19 @@ body {
   transform: scale(1.1);
 }
 
-.react-markdown pre {
-  white-space: pre;         /* preserve formatting of code blocks */
-  overflow-x: auto;         /* scroll if code is too wide */
+/* Apply to the container you wrap your Markdown in: */
+.answer-container {
+  max-width: 100%;           /* never exceed parent width */
+  overflow-x: hidden;        /* hide any accidental overflow */
+  
+  /* text wrapping rules */
+  word-wrap: break-word;     /* older name, widely supported */
+  overflow-wrap: break-word; /* modern standard */
+  word-break: break-all;     /* break even inside “words” if absolutely needed */
+}
+
+/* For code blocks inside that container, allow only the <pre> to scroll */
+.answer-container pre {
+  white-space: pre;          /* keep code formatting */
+  overflow-x: auto;          /* only code scrolls horizontally */
 }

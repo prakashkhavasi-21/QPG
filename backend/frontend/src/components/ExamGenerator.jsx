@@ -569,13 +569,12 @@ export default function ExamGenerator({ user }) {
                         {/* Render the answer if available */}
                         {q.showAnswer && (
                           <div
-                            className="alert alert-success mt-3 react-markdown"
+                            className="alert alert-success mt-3 answer-container"
                             style={{
                               maxWidth: '100%',
-                              width: '100%',
-                              wordBreak: 'break-word',
-                              whiteSpace: 'pre-wrap',
-                              overflowWrap: 'break-word',
+                              wordBreak: 'break-all',      // forces breaks even inside long strings
+                              overflowWrap: 'break-word',  // wrap at word boundaries when possible
+                              whiteSpace: 'pre-wrap',      // preserve manual line breaks
                             }}
                           >
                             <strong>Answer:</strong>
@@ -598,7 +597,7 @@ export default function ExamGenerator({ user }) {
                                       //   overflowX: 'auto',
                                       // }}
                                     >
-                                      <code className={className}>{children}</code>
+                                      <code>{children}</code>
                                     </pre>
                                   );
                                 },
