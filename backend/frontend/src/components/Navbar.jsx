@@ -89,7 +89,7 @@ export default function Navbar({ user }) {
                     // Update Firestore
               await setDoc(doc(db, "users", user.uid), {
                 subscriptionExpires: expiryDate,
-                credits: 0 // no need for credit now
+                credits: 25 // no need for credit now
               }, { merge: true }); // Merge to avoid overwriting other fields
               // Handle payment success here, maybe update the user status to subscribed
               alert("Payment Successful! Order ID: " + response.razorpay_order_id);
@@ -189,7 +189,10 @@ export default function Navbar({ user }) {
               {userData?.subscriptionExpires && (new Date(userData.subscriptionExpires.seconds * 1000) > new Date(Date.now())) && (
                 <div className="alert alert-success d-flex justify-content-between align-items-center">
                   <span>
-                    Subscription Active till: <strong>
+                    Credits : <strong>{userData.credits}</strong>
+                  </span>
+                  <span>                  
+                    Valid till: <strong>
                     {new Date(userData.subscriptionExpires.seconds * 1000).toLocaleDateString('en-IN')}
                     </strong>
                   </span>

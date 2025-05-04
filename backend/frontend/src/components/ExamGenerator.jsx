@@ -109,12 +109,16 @@ export default function ExamGenerator({ user }) {
     setQuestions([]);
     try {
       // Build types array
-      if (credits > 0 || (subscriptionExpires && subscriptionExpires > new Date())) {
+      if (credits > 0) {
         // use one credit
         const ref = doc(db, 'users', user.uid);
         if(credits > 0){
           await updateDoc(ref, { credits: credits - 1 });
           setCredits(credits - 1);
+        }
+        if(subscriptionExpires && subscriptionExpires < new Date()){
+          await updateDoc(ref, { credits: 0 });
+          setCredits(0);
         }
 
         const types = [];
