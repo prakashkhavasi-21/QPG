@@ -407,10 +407,10 @@ export default function ExamGenerator({ user }) {
           {mode === 'multi' && (
             <>
               <div className="mb-3">
-                <label className="form-label">Upload Syllabus PDF</label>
+                <label className="form-label">Upload Syllabus pdf/jpg/jpeg</label>
                 <input
                   type="file"
-                  accept=".pdf"
+                  accept=".pdf, .jpg, .jpeg"
                   className="form-control"
                   onChange={e => setSyllabusFile(e.target.files[0])}
                 />

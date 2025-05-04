@@ -108,21 +108,22 @@ async def create_order(order: OrderRequest):
 
 
 # --- Upload syllabus and extract text ---
-@app.post("/api/upload-syllabus")
-async def upload_syllabus(file: UploadFile = File(...)):
-    contents = await file.read()
-    with open(TEMP_PDF, "wb") as f:
-        f.write(contents)
-    try:
-        text = extract_text_from_pdf(TEMP_PDF)
-        if not text:
-            raise Exception("No extractable text found in PDF (native + OCR).")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"PDF text extraction failed: {e}")
+# @app.post("/api/upload-syllabus")
+# async def upload_syllabus(file: UploadFile = File(...)):
+#     contents = await file.read()
+#     with open(TEMP_PDF, "wb") as f:
+#         f.write(contents)
+#     try:
+#         text = extract_text_from_pdf(TEMP_PDF)
+#         if not text:
+#             raise Exception("No extractable text found in PDF (native + OCR).")
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"PDF text extraction failed: {e}")
 
-    with open(SYLLABUS_TXT, "w", encoding="utf-8") as f:
-        f.write(text)
-    return {"text": text}
+#     with open(SYLLABUS_TXT, "w", encoding="utf-8") as f:
+#         f.write(text)
+#     return {"text": text}
+
 
 # --- Models ---
 class TextIn(BaseModel):
@@ -183,65 +184,6 @@ async def generate_questions(payload: TextIn):
     ]
     return {"questions": questions}
 
-# --- Generate questions by chapter with dynamic types and counts ---
-@app.post("/api/nlp-generate-questions-by-chapter")
-async def generate_questions_by_chapter(payload: ChapterIn):
-    chapter = payload.chapter.strip()
-    n = payload.numQuestions
-    # Determine types
-    types = []
-    if payload.mcq:        types.append("MCQ")
-    if payload.shortAnswer: types.append("short answer")
-    if payload.longAnswer:  types.append("long answer")
-    if not types:
-        raise HTTPException(status_code=400, detail="Select at least one question type.")
-    types_str = ", ".join(types)
-
-    if not chapter:
-        raise HTTPException(status_code=400, detail="Chapter name is required.")
-    try:
-        syllabus_text = open(SYLLABUS_TXT, "r", encoding="utf-8").read()
-    except FileNotFoundError:
-        raise HTTPException(status_code=400, detail="No syllabus uploaded.")
-
-    text_lower = syllabus_text.lower()
-    start_idx = text_lower.find(chapter.lower())
-    if start_idx == -1:
-        raise HTTPException(status_code=404, detail="Chapter not found in syllabus.")
-
-    # find next UNIT marker
-    next_units = [
-        m.start() for m in re.finditer(r"(?:unit[\s\-]*\d+\b)", text_lower)
-        if m.start() > start_idx
-    ]
-    end_idx = next_units[0] if next_units else len(syllabus_text)
-    chapter_content = syllabus_text[start_idx:end_idx].strip()
-
-    system_prompt = (
-        f"You are an expert question generator. Based on the following syllabus section, "
-        f"generate {n} {types_str} question{'s' if n>1 else ''} relevant to it."
-    )
-    try:
-        resp = openai.ChatCompletion.create(
-            model="openai/gpt-4-turbo",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": chapter_content},
-            ],
-            temperature=0.7,
-            max_tokens=300,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"API call failed: {e}")
-
-    if "choices" not in resp or not resp["choices"]:
-        raise HTTPException(status_code=502, detail="No choices returned.")
-    raw = resp["choices"][0]["message"]["content"].strip()
-    questions = [
-        line.lstrip("0123456789. ").strip()
-        for line in raw.split("\n") if line.strip()
-    ]
-    return {"chapter": chapter, "questions": questions}
 
 
 # main.py
@@ -483,6 +425,107 @@ async def upload_question_paper(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail="Could not extract questions from paper.")
 
     return {"questions": questions}
+
+TEMP_PDF = "temp_syllabus.pdf"
+SYLLABUS_TXT = "syllabus.txt"
+
+@app.post("/api/upload-syllabus")
+async def upload_syllabus(file: UploadFile = File(...)):
+    # 1) Determine extension
+    suffix = os.path.splitext(file.filename)[1].lower()
+    if suffix not in [".pdf", ".jpg", ".jpeg"]:
+        raise HTTPException(status_code=400, detail="Unsupported file type. Only PDF, JPG or JPEG allowed.")
+
+    # 2) Save uploaded data
+    contents = await file.read()
+    if suffix == ".pdf":
+        # overwrite the standard temp PDF
+        with open(TEMP_PDF, "wb") as f:
+            f.write(contents)
+        # 3a) Extract from PDF
+        text = extract_text_from_pdf(TEMP_PDF)
+        # but if your PDF has **no** native text, fall back to OCR of its pages:
+        if not text.strip():
+            text = extract_text_from_image(TEMP_PDF)
+    else:
+        # 2b) It's JPG/JPEG → save to a temp image file
+        image_path = f"temp_syllabus_image{suffix}"
+        with open(image_path, "wb") as f:
+            f.write(contents)
+        # 3b) Extract from image via your existing OCR
+        text = extract_text_from_image(image_path)
+        # clean up the temp image
+        os.remove(image_path)
+
+    # 4) Validate + persist
+    if not text.strip():
+        raise HTTPException(status_code=500, detail="Could not extract any text from file.")
+    with open(SYLLABUS_TXT, "w", encoding="utf-8") as f:
+        f.write(text)
+
+    return {"text": text}
+
+
+# --- Generate questions by chapter with dynamic types and counts ---
+@app.post("/api/nlp-generate-questions-by-chapter")
+async def generate_questions_by_chapter(payload: ChapterIn):
+    chapter = payload.chapter.strip()
+    n = payload.numQuestions
+    # Determine types
+    types = []
+    if payload.mcq:        types.append("MCQ")
+    if payload.shortAnswer: types.append("short answer")
+    if payload.longAnswer:  types.append("long answer")
+    if not types:
+        raise HTTPException(status_code=400, detail="Select at least one question type.")
+    types_str = ", ".join(types)
+
+    if not chapter:
+        raise HTTPException(status_code=400, detail="Chapter name is required.")
+    try:
+        syllabus_text = open(SYLLABUS_TXT, "r", encoding="utf-8").read()
+    except FileNotFoundError:
+        raise HTTPException(status_code=400, detail="No syllabus uploaded.")
+
+    text_lower = syllabus_text.lower()
+    start_idx = text_lower.find(chapter.lower())
+    if start_idx == -1:
+        raise HTTPException(status_code=404, detail="Chapter not found in syllabus.")
+
+    # find next UNIT marker
+    next_units = [
+        m.start() for m in re.finditer(r"(?:unit[\s\-]*\d+\b)", text_lower)
+        if m.start() > start_idx
+    ]
+    end_idx = next_units[0] if next_units else len(syllabus_text)
+    chapter_content = syllabus_text[start_idx:end_idx].strip()
+
+    system_prompt = (
+        f"You are an expert question generator. Based on the following syllabus section, "
+        f"generate {n} {types_str} question{'s' if n>1 else ''} relevant to it."
+    )
+    try:
+        resp = openai.ChatCompletion.create(
+            model="openai/gpt-4-turbo",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": chapter_content},
+            ],
+            temperature=0.7,
+            max_tokens=300,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"API call failed: {e}")
+
+    if "choices" not in resp or not resp["choices"]:
+        raise HTTPException(status_code=502, detail="No choices returned.")
+    raw = resp["choices"][0]["message"]["content"].strip()
+    questions = [
+        line.lstrip("0123456789. ").strip()
+        for line in raw.split("\n") if line.strip()
+    ]
+    return {"chapter": chapter, "questions": questions}
+
 
 
 # Serve static assets under /static
