@@ -89,7 +89,7 @@ export default function Navbar({ user }) {
                     // Update Firestore
               await setDoc(doc(db, "users", user.uid), {
                 subscriptionExpires: expiryDate,
-                credits: 25 // no need for credit now
+                credits: 30 // no need for credit now
               }, { merge: true }); // Merge to avoid overwriting other fields
               // Handle payment success here, maybe update the user status to subscribed
               alert("Payment Successful! Order ID: " + response.razorpay_order_id);
@@ -223,13 +223,17 @@ export default function Navbar({ user }) {
                       <h5 className="card-title">Upgrade Plan</h5>
                       <p className="card-text flex-grow-1">
                         <strong>₹99</strong> &nbsp;/ Month.<br />
-                        Please Upgrade for <strong>unlimited access!</strong>.
+                        Please Upgrade and get <strong>20 Credits!</strong>.
                       </p>
                       <p>
-                      <span style={{ color: 'orange' }}>•</span>  Unlimited question paper generation.<br />
-                      <span style={{ color: 'orange' }}>•</span>   No credit limits.<br />
+                      <span style={{ color: 'orange' }}>•</span>   Get access for 20 question paper generation.<br />
+                      <span style={{ color: 'orange' }}>•</span>   1 month validity.<br />
                       <span style={{ color: 'orange' }}>•</span>   Priority support for subscribers.<br />
                       <span style={{ color: 'orange' }}>•</span>   Stay updated with new features.<br />
+                      </p>
+                      <p>
+                        <strong>Special Offer !!!!</strong>
+                        <br /> Upgrade before {new Date(new Date(Date.now()).setDate(new Date(Date.now()).getDate() + 7)).toLocaleDateString('en-IN')} and get <strong>extra 10 Credits</strong>
                       </p>
                       <button
                         className="btn btn-primary mt-auto"

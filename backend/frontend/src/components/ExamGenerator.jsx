@@ -220,7 +220,7 @@ export default function ExamGenerator({ user }) {
       else if (!user) {
         return setLoginPrompt(true);
         } else {
-        alert('You have no free credits left. Please subscribe for ₹99/month.'); 
+        alert('You have no credits left. Please subscribe for ₹99/month.'); 
       }
     } catch (e) {
       console.error(e);
