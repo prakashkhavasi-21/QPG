@@ -312,8 +312,8 @@ export default function ExamGenerator({ user }) {
         <div className="card-body">
           {/* Settings */}
           <div className="row g-3 mb-4">
-            <div className="col-md-4">
-              <label className="form-label">Title</label>
+            <div className="col-md-4" style={{ display: 'none' }}>
+              <label className="form-label" >Title</label>
               <input
                 type="text"
                 className="form-control"
@@ -322,7 +322,7 @@ export default function ExamGenerator({ user }) {
                 placeholder="Title (Optional)"
               />
             </div>
-            <div className="col-md-4">
+            <div className="col-md-4" style={{ display: 'none' }}>
               <label className="form-label">Duration (mins)</label>
               <input
                 type="number"
@@ -332,7 +332,7 @@ export default function ExamGenerator({ user }) {
               />
             </div>
             <div className="col-md-4">
-              <label className="form-label"># Questions</label>
+              <label className="form-label">Number of Questions</label>
               <input
                 type="number"
                 className="form-control"
