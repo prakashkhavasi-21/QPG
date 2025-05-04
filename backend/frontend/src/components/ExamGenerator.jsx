@@ -319,7 +319,7 @@ export default function ExamGenerator({ user }) {
                 className="form-control"
                 value={examTitle}
                 onChange={e => setExamTitle(e.target.value)}
-                placeholder="Exam Title"
+                placeholder="Title (Optional)"
               />
             </div>
             <div className="col-md-4">
