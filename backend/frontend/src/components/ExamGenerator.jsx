@@ -342,29 +342,7 @@ export default function ExamGenerator({ user }) {
             </div>
           </div>
 
-          {/* Question Types */}
-          <div className="mb-4">
-            {['mcq', 'shortAnswer', 'longAnswer'].map(key => (
-              <div className="form-check form-check-inline" key={key}>
-                <input
-                  className="form-check-input"
-                  type="checkbox"
-                  id={key}
-                  checked={questionTypes[key]}
-                  onChange={e =>
-                    setQuestionTypes(prev => ({ ...prev, [key]: e.target.checked }))
-                  }
-                />
-                <label className="form-check-label" htmlFor={key}>
-                  {key === 'mcq'
-                    ? 'MCQ'
-                    : key === 'shortAnswer'
-                    ? 'Short Answer'
-                    : 'Long Answer'}
-                </label>
-              </div>
-            ))}
-          </div>
+
 
           {/* Mode Selection */}
           <div className="mb-4">
@@ -386,7 +364,31 @@ export default function ExamGenerator({ user }) {
             ))}
           </div>
 
-          
+            {/* Question Types */}
+            {mode !== 'questionPaper' && (
+              <div className="mb-4">
+              {['mcq', 'shortAnswer', 'longAnswer'].map(key => (
+                <div className="form-check form-check-inline" key={key}>
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    id={key}
+                    checked={questionTypes[key]}
+                    onChange={e =>
+                      setQuestionTypes(prev => ({ ...prev, [key]: e.target.checked }))
+                    }
+                  />
+                  <label className="form-check-label" htmlFor={key}>
+                    {key === 'mcq'
+                      ? 'MCQ'
+                      : key === 'shortAnswer'
+                      ? 'Short Answer'
+                      : 'Long Answer'}
+                  </label>
+                </div>
+               ))}
+              </div>
+            )}
 
           {/* Paste Text */}
           {mode === 'paste' && (
