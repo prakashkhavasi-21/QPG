@@ -75,7 +75,7 @@ export default function ExamGenerator({ user }) {
         setSubscriptionExpires(expires ? new Date(expires.seconds * 1000) : null);
       } else {
         // first-time login via Google: give 1 free credit
-        await setDoc(ref, { credits: 2, subscriptionExpires: null });
+        await setDoc(ref, { credits: 1, subscriptionExpires: null });
         setCredits(snap.data().credits);
       }
     };

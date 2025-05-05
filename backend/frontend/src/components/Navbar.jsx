@@ -206,7 +206,7 @@ export default function Navbar({ user }) {
                     <div className="card-body d-flex flex-column">
                       <h5 className="card-title">Free Trial</h5>
                       <p className="card-text flex-grow-1">
-                      <span style={{ color: 'orange' }}>•</span> Start for free with <strong>2 Credits</strong>. <br/>
+                      <span style={{ color: 'orange' }}>•</span> Start for free with <strong>1 Credit</strong>. <br/>
                       <span style={{ color: 'orange' }}>•</span> 1 credit = 1 question generate. <br/>
                       <span style={{ color: 'orange' }}>•</span>  Quick and easy access.<br/>
                       <span style={{ color: 'orange' }}>•</span> Explore with your free trial.<br/>
