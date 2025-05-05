@@ -527,6 +527,49 @@ async def generate_questions_by_chapter(payload: ChapterIn):
     return {"chapter": chapter, "questions": questions}
 
 
+class QuestionIn(BaseModel):
+    question: str
+
+@app.post("/api/nlp-generate-answer-to-question")
+async def generate_answer_to_question(payload: QuestionIn):
+    user_question = payload.question.strip()
+
+    if not user_question:
+        raise HTTPException(status_code=400, detail="Question is required.")
+
+    # Load already uploaded + extracted syllabus text
+    try:
+        syllabus_text = open(SYLLABUS_TXT, "r", encoding="utf-8").read()
+    except FileNotFoundError:
+        raise HTTPException(status_code=400, detail="No syllabus uploaded.")
+
+    # Build system prompt
+    system_prompt = (
+        "You are an expert academic assistant. Using the provided syllabus content, "
+        "answer the user's question clearly, concisely, and accurately. "
+        "Only answer if relevant information is found. If not found, say 'Information not found in syllabus.'"
+    )
+
+    try:
+        resp = openai.ChatCompletion.create(
+            model="gpt-4-turbo",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": f"Syllabus content:\n\n{syllabus_text}\n\nUser question: {user_question}"},
+            ],
+            temperature=0.3,
+            max_tokens=400,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"API call failed: {e}")
+
+    if "choices" not in resp or not resp["choices"]:
+        raise HTTPException(status_code=502, detail="No choices returned.")
+
+    answer = resp["choices"][0]["message"]["content"].strip()
+
+    return {"question": user_question, "answer": answer}
+
 
 # Serve static assets under /static
 app.mount("/static", StaticFiles(directory="frontend/dist", html=True), name="static")

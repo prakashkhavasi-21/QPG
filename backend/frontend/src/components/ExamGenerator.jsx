@@ -19,6 +19,7 @@ export default function ExamGenerator({ user }) {
     longAnswer: false,
   });
   const [mode, setMode] = useState('paste');
+  const [syllabusmode, setSyllabusMode] = useState('chapter');
   const [topics, setTopics] = useState([{ id: Date.now(), name: '', marks: '' }]);
   const [pasteText, setPasteText] = useState('');
   const [syllabusFile, setSyllabusFile] = useState(null);
@@ -27,14 +28,20 @@ export default function ExamGenerator({ user }) {
   ]);
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingAnswers, setLoadingAnswers] = useState(false);
   const [error, setError] = useState('');
   const [loginPrompt, setLoginPrompt] = useState(false);
+  const [answers, setAnswers] = useState([]);
 
   const navigate = useNavigate();
   const [credits, setCredits] = useState(null);
   const [subscriptionExpires, setSubscriptionExpires] = useState(null);
 
   const [questionPaperFile, setQuestionPaperFile] = useState(null);
+
+  const [questionRequests, setQuestionRequests] = useState([
+    { id: Date.now(), question: '', selected: true },
+  ]);
 
   //const API_URL = "http://localhost:8001";
   //const API_URL = "https://qpg-4e99a2de660c.herokuapp.com";
@@ -75,6 +82,19 @@ export default function ExamGenerator({ user }) {
     );
   const removeTopic = id =>
     setTopics(prev => prev.filter(t => t.id !== id));
+
+  const addQuestion = () =>
+    setQuestionRequests(prev => [
+      ...prev, {id: Date.now(), question: '', selected: true },
+    ]);
+
+  const updateQuestion = (id, field, value) =>
+    setQuestionRequests(prev =>
+      prev.map(c => (c.id === id ? { ...c, [field]: value } : c))
+    );
+    
+  const removeQuestion = id =>
+    setQuestionRequests(prev => prev.filter(c => c.id !== id));  
 
   // --- Helpers for multi-chapter ---
   const addChapter = () =>
@@ -294,6 +314,56 @@ export default function ExamGenerator({ user }) {
     }
   };
 
+  const Answergenerate = async () => {
+    setAnswers([]);
+    setLoadingAnswers(true);   // <--- ADD THIS
+  
+    try {
+      await handleUpload();  // you may also want to confirm success here
+  
+      if (mode === 'multi') {
+        if (syllabusmode === 'question') {
+          const selectedQuestions = questionRequests.filter(x => x.selected && x.question.trim());
+          console.log("Selected questions:", selectedQuestions);
+  
+          if (selectedQuestions.length === 0) {
+            alert("Please select at least one question.");
+            return;
+          }
+  
+          const aggregated = [];
+  
+          for (const c of selectedQuestions) {
+            console.log(`Sending API call for question: "${c.question}"`);
+  
+            const res = await fetch(`${API_URL}/api/nlp-generate-answer-to-question`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ question: c.question })
+            });
+  
+            if (!res.ok) {
+              const errorText = await res.text();
+              console.error(`API error: ${errorText}`);
+              throw new Error(`Answer generation failed for question: "${c.question}"`);
+            }
+  
+            const { answer } = await res.json();
+            aggregated.push({ question: c.question, answer });
+          }
+  
+          setAnswers(aggregated);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "An error occurred");
+    } finally {
+      setLoadingAnswers(false);   // <--- ADD THIS
+    }
+  };
+  
+  
 
 
   return (
@@ -415,6 +485,126 @@ export default function ExamGenerator({ user }) {
                   onChange={e => setSyllabusFile(e.target.files[0])}
                 />
               </div>
+
+                <div className="mb-4">
+                {['chapter', 'question'].map(m => (
+                  <div className="form-check form-check-inline" key={m}>
+                    <input
+                      className="form-check-input"
+                      type="radio"
+                      name="syllabusmode"
+                      id={m}
+                      value={m}
+                      checked={syllabusmode === m}
+                      onChange={() => setSyllabusMode(m)}
+                    />
+                    <label className="form-check-label" htmlFor={m}>
+                      {m === 'chapter' ? 'Topic' : 'Question'}
+                    </label>
+                  </div>
+                ))}
+              </div>
+
+                {syllabusmode === 'question' && (
+                  <div>
+                  <table className="table table-bordered mb-3">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Questions</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      { questionRequests.map(c => (
+                        <tr key={c.id}>
+                          <td className="text-center" style={{ width: '10%' }}>
+                            <input
+                              type="checkbox"
+                              className="form-check-input"
+                              checked={c.selected}
+                              onChange={e => updateQuestion(c.id, 'selected', e.target.checked)}
+                            />
+                          </td>
+                          <td style={{ width: '90%' }}>
+                            <textarea
+                              rows={1}
+                              className="form-control"
+                              placeholder="Enter Question..."
+                              value={c.question}
+                              onChange={e => updateQuestion(c.id, 'question', e.target.value)}
+                            />
+                          </td>
+                              <td className="text-center" style={{ width: '10%' }}>
+                                <button
+                                  className="btn btn-sm btn-outline-danger"
+                                  onClick={() => removeQuestion(c.id)}
+                                >
+                                  &times;
+                                </button>
+                                
+                              </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                    <div className="d-flex gap-2 mb-4">
+                        <button className="btn btn-sm btn-primary" onClick={addQuestion}>
+                        + Add Question
+                      </button>
+                      <button className="btn btn-sm btn-success" onClick={Answergenerate}>
+                        {loadingAnswers ? 'Generating...' : 'Get Answer'}
+                      </button>  
+                  </div>  
+                </div>                      
+                )}
+
+                  {answers.length > 0 && (
+                    <div className="card mt-4">
+                      <div className="card-header bg-success text-white">
+                        <strong>Generated Answers for Your Questions</strong>
+                      </div>
+                      <div className="card-body">
+                        <table className="table table-bordered">
+                          <thead>
+                            <tr>
+                              <th style={{ width: '40%' }}>Question</th>
+                              <th>Answer</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {answers.map((item, index) => (
+                              <tr key={index}>
+                                <td>{item.question}</td>
+                                <td>
+                                  <ReactMarkdown
+                                    remarkPlugins={[remarkGfm]}
+                                    components={{
+                                      code({ inline, className, children, ...props }) {
+                                        if (inline) {
+                                          return <code {...props} className={className}>{children}</code>;
+                                        }
+                                        return (
+                                          <pre {...props}>
+                                            <code className={className}>{children}</code>
+                                          </pre>
+                                        );
+                                      }
+                                    }}
+                                  >
+                                    {item.answer}
+                                  </ReactMarkdown>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+  
+              {syllabusmode === 'chapter' && (
+              <div>
               <table className="table table-bordered mb-3">
                 <thead>
                   <tr>
@@ -472,9 +662,12 @@ export default function ExamGenerator({ user }) {
                   ))}
                 </tbody>
               </table>
-              <button className="btn btn-sm btn-success mb-4" onClick={addChapter}>
-                + Add Chapter
-              </button>
+              
+                <button className="btn btn-sm btn-success mb-4" onClick={addChapter}>
+                  + Add Chapter
+                </button>
+              </div>
+              )}
             </>
           )}
 
@@ -519,6 +712,7 @@ export default function ExamGenerator({ user }) {
               </button>
             )}
           </div>
+
 
             {questions.length > 0 && (
               <div className="mt-5">
