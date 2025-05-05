@@ -54,6 +54,15 @@ export default function ExamGenerator({ user }) {
     }
   }, [user, loginPrompt]);
 
+
+  // reset syllabusmode if we leave multi
+  useEffect(() => {
+    if (mode !== 'multi') setSyllabusMode('chapter');
+  }, [mode]);
+
+  // compute whether to show the main "Generate Questions" button
+  const showGenerate = !(mode === 'multi' && syllabusmode === 'question');
+
    // 1) On mount: fetch (or init) your free credit
   useEffect(() => {
     const loadCredits = async () => {
@@ -559,50 +568,28 @@ export default function ExamGenerator({ user }) {
                 </div>                      
                 )}
 
-                  {answers.length > 0 && (
-                    <div className="card mt-4">
-                      <div className="card-header bg-success text-white">
-                        <strong>Generated Answers for Your Questions</strong>
-                      </div>
-                      <div className="card-body">
-                        <table className="table table-bordered">
-                          <thead>
-                            <tr>
-                              <th style={{ width: '40%' }}>Question</th>
-                              <th>Answer</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {answers.map((item, index) => (
-                              <tr key={index}>
-                                <td>{item.question}</td>
-                                <td>
-                                  <ReactMarkdown
-                                    remarkPlugins={[remarkGfm]}
-                                    components={{
-                                      code({ inline, className, children, ...props }) {
-                                        if (inline) {
-                                          return <code {...props} className={className}>{children}</code>;
-                                        }
-                                        return (
-                                          <pre {...props}>
-                                            <code className={className}>{children}</code>
-                                          </pre>
-                                        );
-                                      }
-                                    }}
-                                  >
-                                    {item.answer}
-                                  </ReactMarkdown>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                {answers.length > 0 && syllabusmode !== 'chapter' && (
+                  <div className="card mt-4">
+                    <div className="card-header bg-success text-white">
+                      <strong>Generated Q&A</strong>
+                    </div>
+                    <div className="card-body">
+                      <div className="list-group">
+                        {answers.map((item, index) => (
+                          <div key={index} className="list-group-item">
+                            <h6 className="mb-2">Q: {item.question}</h6>
+                            <div className="ps-3">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {item.answer}
+                              </ReactMarkdown>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  )}
-  
+                  </div>
+                )}
+
               {syllabusmode === 'chapter' && (
               <div>
               <table className="table table-bordered mb-3">
@@ -703,10 +690,12 @@ export default function ExamGenerator({ user }) {
 
           {/* Actions */}
           <div className="d-flex gap-2 mb-4">
+          {showGenerate && (
             <button className="btn btn-primary" onClick={generate} disabled={loading}>
               {loading ? 'Generating...' : 'Generate Questions'}
             </button>
-            {questions.length > 0 && (
+          )}
+            {questions.length > 0 && showGenerate &&  (
               <button className="btn btn-success" onClick={downloadPdf}>
                 Download PDF
               </button>
@@ -714,9 +703,9 @@ export default function ExamGenerator({ user }) {
           </div>
 
 
-            {questions.length > 0 && (
+            {questions.length > 0 && syllabusmode !== 'question' && (
               <div className="mt-5">
-                <h5>Generated Questions:</h5>
+                <h5>Generated Questionssy:</h5>
                 {questions.map((q, idx) => {
                   // Detect MCQ by looking for lines like "A. option"
                   const lines = q.question.split('\n');
