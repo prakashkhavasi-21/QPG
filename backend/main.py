@@ -10,7 +10,6 @@ from PIL import Image
 import pytesseract
 import os
 import re
-from pydantic import BaseModel
 from typing import Optional
 import razorpay
 from fastapi.staticfiles import StaticFiles
@@ -22,21 +21,20 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.enums import TA_LEFT
 import tempfile
-from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
-import torch
+import cohere
 
 app = FastAPI()
+
+# Cohere Configuration
+COHERE_API_KEY = os.environ.get('COHERE_API_KEY')
+if not COHERE_API_KEY:
+    raise ValueError("COHERE_API_KEY environment variable not set")
+co = cohere.Client(COHERE_API_KEY)
 
 # Razorpay Configuration
 RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID')
 RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET')
 razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
-
-# Initialize Hugging Face model and tokenizer
-MODEL_NAME = "t5-small"
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME)
-generator = pipeline("text2text-generation", model=model, tokenizer=tokenizer, device=0 if torch.cuda.is_available() else -1)
 
 # CORS Middleware
 origins = [
@@ -144,25 +142,18 @@ def extract_text_from_image(path: str) -> str:
         print(f"[image OCR] error: {e}")
         return ""
 
-async def generate_hf_response(prompt: str, max_tokens: int = 400, use_thinking_mode: bool = True) -> str:
+async def generate_cohere_response(prompt: str, max_tokens: int = 400) -> str:
     try:
-        # Adjust prompt for T5 (T5 expects a task prefix)
-        task_prefix = "generate questions: " if "question" in prompt.lower() else "answer question: "
-        input_text = f"{task_prefix}{prompt}"
-
-        # Generate response using the pipeline
-        response = generator(
-            input_text,
-            max_length=max_tokens,
-            num_return_sequences=1,
-            do_sample=True,
-            top_p=0.9,
-            temperature=0.7
-        )[0]["generated_text"]
-
-        return response.strip()
+        response = co.generate(
+            model="command-r-plus",
+            prompt=prompt,
+            max_tokens=max_tokens,
+            temperature=0.7,
+            stop_sequences=["\n\n"]
+        )
+        return response.generations[0].text.strip()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Hugging Face model inference error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Cohere API error: {str(e)}")
 
 # --- Endpoints ---
 @app.post("/api/upload-syllabus")
@@ -208,13 +199,11 @@ async def generate_questions(payload: TextIn):
         f"Return only the questions, one per line, without numbering."
     )
     try:
-        response = await generate_hf_response(f"{system_prompt}\n\nText:\n{full_text}", max_tokens=400)
-        print("Hugging Face Raw Response:", response)
+        response = await generate_cohere_response(f"{system_prompt}\n\nText:\n{full_text}", max_tokens=400)
         questions = [q.strip() for q in response.split("\n") if q.strip()]
-        print("Processed Questions:", questions)
         return {"questions": questions[:n]}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Hugging Face inference error: {e}")
+        raise HTTPException(status_code=500, detail=f"Cohere inference error: {e}")
 
 @app.post("/api/upload-question-paper")
 async def upload_question_paper(file: UploadFile = File(...)):
@@ -241,30 +230,30 @@ async def upload_question_paper(file: UploadFile = File(...)):
     match = re.search(r'No\.?\s*of\s*Questions\s*[:\-]?\s*(\d+)', raw_text, flags=re.I)
     total_q = int(match.group(1)) if match else None
     n_txt = f" The paper states there are {total_q} questions." if total_q else ""
-    system_prompt = f"""
-        You are an assistant that receives the full text of an exam paper (including headings, instructions, passages, and questions).
-        Your task is to extract all questions and return them as a list of strings, one question per line.
-        - Include ALL types of questions.
-        - Remove all numbering or lettering ("1.", "(a)", etc.) from each question text.
-        - DO NOT include general instructions or answers.
-        {n_txt}
-        Return only the questions, one per line.
-    """.strip()
+    system_prompt = (
+        f"You are an assistant that receives the full text of an exam paper (including headings, instructions, passages, and questions). "
+        f"Your task is to extract all questions and return them as a list of strings, one question per line. "
+        f"- Include ALL types of questions. "
+        f"- Remove all numbering or lettering ('1.', '(a)', etc.) from each question text. "
+        f"- DO NOT include general instructions or answers. "
+        f"{n_txt}\n"
+        f"Return only the questions, one per line."
+    )
     try:
-        response = await generate_hf_response(system_prompt + f"\n\n{raw_text}", max_tokens=1500, use_thinking_mode=False)
+        response = await generate_cohere_response(f"{system_prompt}\n\n{raw_text}", max_tokens=1500)
         questions = [q.strip() for q in response.split("\n") if q.strip()]
         return {"questions": questions}
     except Exception as e:
-        print(f"[Hugging Face parse fallback] {e}")
+        print(f"[Cohere parse fallback] {e}")
         fallback_matches = re.finditer(
             r'(\d+\.\s+.*?(?=\n\d+\.|\Z))|(\([a-z]\)\s+.*?(?=\n\([a-z]\)|\n\d+\.|\Z))',
             raw_text,
             flags=re.S | re.I
         )
         questions = [m.group(0) for m in fallback_matches]
-    if not questions:
-        raise HTTPException(status_code=500, detail="Could not extract questions from paper.")
-    return {"questions": questions}
+        if not questions:
+            raise HTTPException(status_code=500, detail="Could not extract questions from paper.")
+        return {"questions": questions}
 
 @app.post("/api/nlp-generate-questions-by-chapter")
 async def generate_questions_by_chapter(payload: ChapterIn):
@@ -299,11 +288,11 @@ async def generate_questions_by_chapter(payload: ChapterIn):
         f"Return only the questions, one per line, without numbering."
     )
     try:
-        response = await generate_hf_response(f"{system_prompt}\n\n{chapter_content}", max_tokens=300)
+        response = await generate_cohere_response(f"{system_prompt}\n\n{chapter_content}", max_tokens=300)
         questions = [q.strip() for q in response.split("\n") if q.strip()]
         return {"chapter": chapter, "questions": questions[:n]}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Hugging Face inference error: {e}")
+        raise HTTPException(status_code=500, detail=f"Cohere inference error: {e}")
 
 @app.post("/api/generate-answer")
 async def generate_answer(req: AnswerRequest):
@@ -314,11 +303,10 @@ async def generate_answer(req: AnswerRequest):
         "You are an expert tutor. Provide a clear, concise answer to the following question."
     )
     try:
-        response = await generate_hf_response(f"{system_prompt}\n\nQuestion: {
-System: question}", max_tokens=300)
+        response = await generate_cohere_response(f"{system_prompt}\n\nQuestion: {question}", max_tokens=300)
         return {"answer": response}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Hugging Face inference error: {e}")
+        raise HTTPException(status_code=500, detail=f"Cohere inference error: {e}")
 
 @app.post("/api/nlp-generate-answer-to-question")
 async def generate_answer_to_question(payload: QuestionIn):
@@ -335,13 +323,13 @@ async def generate_answer_to_question(payload: QuestionIn):
         "If no relevant information is found, say 'Information not found in syllabus.'"
     )
     try:
-        response = await generate_hf_response(
+        response = await generate_cohere_response(
             f"{system_prompt}\n\nSyllabus content:\n{syllabus_text}\n\nUser question: {user_question}",
             max_tokens=400
         )
         return {"question": user_question, "answer": response}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Hugging Face inference error: {e}")
+        raise HTTPException(status_code=500, detail=f"Cohere inference error: {e}")
 
 @app.post("/api/export-pdf")
 async def export_pdf(request: Request):
@@ -377,15 +365,15 @@ async def export_pdf(request: Request):
     q_items = []
 
     for idx, q in enumerate(questions, start=1):
-        stem = q.get("stem", "")
+        stem = q.get("stem", "") or q.get("question", "")
         options = q.get("options", [])
         marks = q.get("marks", "")
 
-        # Prepare the question item elements (stem + options for MCQs, or just the stem for non-MCQs)
+        # Prepare the question item elements
         question_elements = []
 
         # Add the question stem
-        q_text = f".{stem}"
+        q_text = f"{stem}"
         if marks:
             q_text += f"  <i>({marks} marks)</i>"
         question_elements.append(Paragraph(q_text, question_style))
@@ -396,7 +384,7 @@ async def export_pdf(request: Request):
             nested_list = ListFlowable(option_items, bulletType='bullet', start='circle', leftIndent=20)
             question_elements.append(nested_list)
 
-        # Add the question (with its options) as a single ListItem
+        # Add the question as a ListItem
         q_items.append(ListItem(question_elements, leftIndent=0))
 
     # Create the numbered list of questions

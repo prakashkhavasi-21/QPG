@@ -20,5 +20,4 @@ pdf2image
 PyMuPDF
 Pillow
 pdfplumber
-transformers>=4.44.2 
-torch>=2.4.1
+cohere>=4.30
