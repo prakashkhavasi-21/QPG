@@ -20,5 +20,5 @@ pdf2image
 PyMuPDF
 Pillow
 pdfplumber
-transformers==4.44.2
-torch==2.4.1
+transformers>=4.44.2 
+torch>=2.4.1
