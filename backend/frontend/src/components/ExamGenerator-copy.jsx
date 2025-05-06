@@ -19,6 +19,7 @@ export default function ExamGenerator({ user }) {
     longAnswer: false,
   });
   const [mode, setMode] = useState('paste');
+  const [syllabusmode, setSyllabusMode] = useState('chapter');
   const [topics, setTopics] = useState([{ id: Date.now(), name: '', marks: '' }]);
   const [pasteText, setPasteText] = useState('');
   const [syllabusFile, setSyllabusFile] = useState(null);
@@ -27,8 +28,10 @@ export default function ExamGenerator({ user }) {
   ]);
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingAnswers, setLoadingAnswers] = useState(false);
   const [error, setError] = useState('');
   const [loginPrompt, setLoginPrompt] = useState(false);
+  const [answers, setAnswers] = useState([]);
 
   const navigate = useNavigate();
   const [credits, setCredits] = useState(null);
@@ -36,9 +39,13 @@ export default function ExamGenerator({ user }) {
 
   const [questionPaperFile, setQuestionPaperFile] = useState(null);
 
-  const API_URL = "http://localhost:8001";
+  const [questionRequests, setQuestionRequests] = useState([
+    { id: Date.now(), question: '', selected: true },
+  ]);
+
+  //const API_URL = "http://localhost:8001";
   //const API_URL = "https://qpg-4e99a2de660c.herokuapp.com";
-  //const API_URL = "https://www.qnagenai.com";
+  const API_URL = "https://www.qnagenai.com";
 
   // Reset prompt if user logs in
   useEffect(() => {
@@ -46,6 +53,15 @@ export default function ExamGenerator({ user }) {
       setLoginPrompt(false);
     }
   }, [user, loginPrompt]);
+
+
+  // reset syllabusmode if we leave multi
+  useEffect(() => {
+    if (mode !== 'multi') setSyllabusMode('chapter');
+  }, [mode]);
+
+  // compute whether to show the main "Generate Questions" button
+  const showGenerate = !(mode === 'multi' && syllabusmode === 'question');
 
    // 1) On mount: fetch (or init) your free credit
   useEffect(() => {
@@ -60,7 +76,7 @@ export default function ExamGenerator({ user }) {
       } else {
         // first-time login via Google: give 1 free credit
         await setDoc(ref, { credits: 1, subscriptionExpires: null });
-        setCredits(1);
+        setCredits(snap.data().credits);
       }
     };
     loadCredits();
@@ -75,6 +91,19 @@ export default function ExamGenerator({ user }) {
     );
   const removeTopic = id =>
     setTopics(prev => prev.filter(t => t.id !== id));
+
+  const addQuestion = () =>
+    setQuestionRequests(prev => [
+      ...prev, {id: Date.now(), question: '', selected: true },
+    ]);
+
+  const updateQuestion = (id, field, value) =>
+    setQuestionRequests(prev =>
+      prev.map(c => (c.id === id ? { ...c, [field]: value } : c))
+    );
+    
+  const removeQuestion = id =>
+    setQuestionRequests(prev => prev.filter(c => c.id !== id));  
 
   // --- Helpers for multi-chapter ---
   const addChapter = () =>
@@ -120,7 +149,6 @@ export default function ExamGenerator({ user }) {
           await updateDoc(ref, { credits: 0 });
           setCredits(0);
         }
-        
 
         const types = [];
         if (questionTypes.mcq) types.push('MCQ');
@@ -221,7 +249,7 @@ export default function ExamGenerator({ user }) {
       else if (!user) {
         return setLoginPrompt(true);
         } else {
-        alert('You have no free credits left. Please subscribe for ₹99/month.'); 
+        alert('You have no credits left. Please subscribe for ₹99/month.'); 
       }
     } catch (e) {
       console.error(e);
@@ -295,6 +323,56 @@ export default function ExamGenerator({ user }) {
     }
   };
 
+  const Answergenerate = async () => {
+    setAnswers([]);
+    setLoadingAnswers(true);   // <--- ADD THIS
+  
+    try {
+      await handleUpload();  // you may also want to confirm success here
+  
+      if (mode === 'multi') {
+        if (syllabusmode === 'question') {
+          const selectedQuestions = questionRequests.filter(x => x.selected && x.question.trim());
+          console.log("Selected questions:", selectedQuestions);
+  
+          if (selectedQuestions.length === 0) {
+            alert("Please select at least one question.");
+            return;
+          }
+  
+          const aggregated = [];
+  
+          for (const c of selectedQuestions) {
+            console.log(`Sending API call for question: "${c.question}"`);
+  
+            const res = await fetch(`${API_URL}/api/nlp-generate-answer-to-question`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ question: c.question })
+            });
+  
+            if (!res.ok) {
+              const errorText = await res.text();
+              console.error(`API error: ${errorText}`);
+              throw new Error(`Answer generation failed for question: "${c.question}"`);
+            }
+  
+            const { answer } = await res.json();
+            aggregated.push({ question: c.question, answer });
+          }
+  
+          setAnswers(aggregated);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "An error occurred");
+    } finally {
+      setLoadingAnswers(false);   // <--- ADD THIS
+    }
+  };
+  
+  
 
 
   return (
@@ -313,17 +391,17 @@ export default function ExamGenerator({ user }) {
         <div className="card-body">
           {/* Settings */}
           <div className="row g-3 mb-4">
-            <div className="col-md-4">
-              <label className="form-label">Title</label>
+            <div className="col-md-4" style={{ display: 'none' }}>
+              <label className="form-label" >Title</label>
               <input
                 type="text"
                 className="form-control"
                 value={examTitle}
                 onChange={e => setExamTitle(e.target.value)}
-                placeholder="Exam Title"
+                placeholder="Title (Optional)"
               />
             </div>
-            <div className="col-md-4">
+            <div className="col-md-4" style={{ display: 'none' }}>
               <label className="form-label">Duration (mins)</label>
               <input
                 type="number"
@@ -333,7 +411,7 @@ export default function ExamGenerator({ user }) {
               />
             </div>
             <div className="col-md-4">
-              <label className="form-label"># Questions</label>
+              <label className="form-label">Number of Questions</label>
               <input
                 type="number"
                 className="form-control"
@@ -343,29 +421,7 @@ export default function ExamGenerator({ user }) {
             </div>
           </div>
 
-          {/* Question Types */}
-          <div className="mb-4">
-            {['mcq', 'shortAnswer', 'longAnswer'].map(key => (
-              <div className="form-check form-check-inline" key={key}>
-                <input
-                  className="form-check-input"
-                  type="checkbox"
-                  id={key}
-                  checked={questionTypes[key]}
-                  onChange={e =>
-                    setQuestionTypes(prev => ({ ...prev, [key]: e.target.checked }))
-                  }
-                />
-                <label className="form-check-label" htmlFor={key}>
-                  {key === 'mcq'
-                    ? 'MCQ'
-                    : key === 'shortAnswer'
-                    ? 'Short Answer'
-                    : 'Long Answer'}
-                </label>
-              </div>
-            ))}
-          </div>
+
 
           {/* Mode Selection */}
           <div className="mb-4">
@@ -387,53 +443,31 @@ export default function ExamGenerator({ user }) {
             ))}
           </div>
 
-          {/* Manual Topics */}
-          {/* {mode === 'manual' && (
-            <>
-              <table className="table table-bordered mb-3">
-                <thead>
-                  <tr>
-                    <th>Topic</th>
-                    <th>Marks</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {topics.map(t => (
-                    <tr key={t.id}>
-                      <td>
-                        <input
-                          type="text"
-                          className="form-control"
-                          value={t.name}
-                          onChange={e => updateTopic(t.id, 'name', e.target.value)}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          className="form-control"
-                          value={t.marks}
-                          onChange={e => updateTopic(t.id, 'marks', e.target.value)}
-                        />
-                      </td>
-                      <td className="text-center">
-                        <button
-                          className="btn btn-sm btn-outline-danger"
-                          onClick={() => removeTopic(t.id)}
-                        >
-                          &times;
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <button className="btn btn-sm btn-success mb-4" onClick={addTopic}>
-                + Add Topic
-              </button>
-            </>
-          )} */}
+            {/* Question Types */}
+            {mode !== 'questionPaper' && (
+              <div className="mb-4">
+              {['mcq', 'shortAnswer', 'longAnswer'].map(key => (
+                <div className="form-check form-check-inline" key={key}>
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    id={key}
+                    checked={questionTypes[key]}
+                    onChange={e =>
+                      setQuestionTypes(prev => ({ ...prev, [key]: e.target.checked }))
+                    }
+                  />
+                  <label className="form-check-label" htmlFor={key}>
+                    {key === 'mcq'
+                      ? 'MCQ'
+                      : key === 'shortAnswer'
+                      ? 'Short Answer'
+                      : 'Long Answer'}
+                  </label>
+                </div>
+               ))}
+              </div>
+            )}
 
           {/* Paste Text */}
           {mode === 'paste' && (
@@ -452,14 +486,112 @@ export default function ExamGenerator({ user }) {
           {mode === 'multi' && (
             <>
               <div className="mb-3">
-                <label className="form-label">Upload Syllabus PDF</label>
+                <label className="form-label">Upload Syllabus pdf/jpg/jpeg</label>
                 <input
                   type="file"
-                  accept=".pdf"
+                  accept=".pdf, .jpg, .jpeg"
                   className="form-control"
                   onChange={e => setSyllabusFile(e.target.files[0])}
                 />
               </div>
+
+                <div className="mb-4">
+                {['chapter', 'question'].map(m => (
+                  <div className="form-check form-check-inline" key={m}>
+                    <input
+                      className="form-check-input"
+                      type="radio"
+                      name="syllabusmode"
+                      id={m}
+                      value={m}
+                      checked={syllabusmode === m}
+                      onChange={() => setSyllabusMode(m)}
+                    />
+                    <label className="form-check-label" htmlFor={m}>
+                      {m === 'chapter' ? 'Topic' : 'Question'}
+                    </label>
+                  </div>
+                ))}
+              </div>
+
+                {syllabusmode === 'question' && (
+                  <div>
+                  <table className="table table-bordered mb-3">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Questions</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      { questionRequests.map(c => (
+                        <tr key={c.id}>
+                          <td className="text-center" style={{ width: '10%' }}>
+                            <input
+                              type="checkbox"
+                              className="form-check-input"
+                              checked={c.selected}
+                              onChange={e => updateQuestion(c.id, 'selected', e.target.checked)}
+                            />
+                          </td>
+                          <td style={{ width: '90%' }}>
+                            <textarea
+                              rows={1}
+                              className="form-control"
+                              placeholder="Enter Question..."
+                              value={c.question}
+                              onChange={e => updateQuestion(c.id, 'question', e.target.value)}
+                            />
+                          </td>
+                              <td className="text-center" style={{ width: '10%' }}>
+                                <button
+                                  className="btn btn-sm btn-outline-danger"
+                                  onClick={() => removeQuestion(c.id)}
+                                >
+                                  &times;
+                                </button>
+                                
+                              </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                    <div className="d-flex gap-2 mb-4">
+                        <button className="btn btn-sm btn-primary" onClick={addQuestion}>
+                        + Add Question
+                      </button>
+                      <button className="btn btn-sm btn-success" onClick={Answergenerate}>
+                        {loadingAnswers ? 'Generating...' : 'Get Answer'}
+                      </button>  
+                  </div>  
+                </div>                      
+                )}
+
+                {answers.length > 0 && syllabusmode !== 'chapter' && (
+                  <div className="card mt-4">
+                    <div className="card-header bg-success text-white">
+                      <strong>Generated Q&A</strong>
+                    </div>
+                    <div className="card-body">
+                      <div className="list-group">
+                        {answers.map((item, index) => (
+                          <div key={index} className="list-group-item">
+                            <h6 className="mb-2">Q: {item.question}</h6>
+                            <div className="ps-3">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {item.answer}
+                              </ReactMarkdown>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+              {syllabusmode === 'chapter' && (
+              <div>
               <table className="table table-bordered mb-3">
                 <thead>
                   <tr>
@@ -517,19 +649,22 @@ export default function ExamGenerator({ user }) {
                   ))}
                 </tbody>
               </table>
-              <button className="btn btn-sm btn-success mb-4" onClick={addChapter}>
-                + Add Chapter
-              </button>
+              
+                <button className="btn btn-sm btn-success mb-4" onClick={addChapter}>
+                  + Add Chapter
+                </button>
+              </div>
+              )}
             </>
           )}
 
             {/* Upload Question Paper */}
             {mode === 'questionPaper' && (
               <div className="mb-3">
-                <label className="form-label">Upload Question Paper PDF</label>
+                <label className="form-label">Upload Question Paper pdf/jpg/jpeg</label>
                 <input
                   type="file"
-                  accept=".pdf"
+                  accept=".pdf, .jpg, .jpeg"
                   className="form-control"
                   onChange={e => {
                     setError('');
@@ -555,117 +690,22 @@ export default function ExamGenerator({ user }) {
 
           {/* Actions */}
           <div className="d-flex gap-2 mb-4">
+          {showGenerate && (
             <button className="btn btn-primary" onClick={generate} disabled={loading}>
               {loading ? 'Generating...' : 'Generate Questions'}
             </button>
-            {questions.length > 0 && (
+          )}
+            {questions.length > 0 && showGenerate &&  (
               <button className="btn btn-success" onClick={downloadPdf}>
                 Download PDF
               </button>
             )}
           </div>
 
-          {/* Generated Questions */}
-          {/* {questions.length > 0 && (
-            <div>
-              <h5>Generated Questions</h5>
-              <ul className="list-group">
-                {questions.map((q, i) => (
-                  <li className="list-group-item" key={i}>
-                    {q.question}
-                    {q.marks != null &&  (
-                      <span className="badge bg-secondary ms-2">{q.marks} marks</span>
-                    )} 
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )} */}
 
-           {/* {questions.length > 0 && (
+            {questions.length > 0 && syllabusmode !== 'question' && (
               <div className="mt-5">
-                <h5>Generated Questions:</h5>
-                {questions.map((q, idx) => {
-                  // Detect MCQ by looking for lines like "A. option"
-                  const lines = q.question.split('\n');
-                  const isMCQ = lines.some(line => /^[A-D]\.\s+/.test(line.trim()));
-
-                  return (
-                    <div key={idx} className="card mb-3">
-                      <div className="card-body">
-                        <h6>Q{idx+1}. {lines[0]}</h6>
-
-                        {isMCQ && lines.slice(1).map((opt,i) => (
-                          <div key={i} className="form-check">
-                            <input className="form-check-input" type="radio" name={`q${idx}`} />
-                            <label className="form-check-label">{opt}</label>
-                          </div>
-                        ))}
-
-
-                        {!isMCQ && !q.showAnswer && (
-                          <button
-                            className="btn btn-sm btn-primary mt-2"
-                            onClick={() => generateAnswer(idx)}
-                            disabled={q.loadingAnswer}
-                          >
-                            {q.loadingAnswer ? 'Generating...' : 'Generate Answer'}
-                          </button>
-                        )}
-
-
-
-                          {q.showAnswer && (
-                            <div
-                              className="alert alert-success mt-3"
-                              style={{ 
-                                // ensure text wraps and breaks long words/URLs
-                                wordBreak: 'break-word',
-                                whiteSpace: 'pre-wrap',
-                                overflowWrap: 'anywhere'
-                              }}
-                            >
-                              <strong>Answer:</strong>
-                              <ReactMarkdown
-                                // remark-gfm turns “1. X” lines into <ol><li>
-                                remarkPlugins={[remarkGfm]}
-                                // only unwrap code fences to <code> blocks, not rest
-                                components={{
-                                  code({node, inline, className, children, ...props}) {
-                                    if (inline) {
-                                      return <code {...props} className={className}>{children}</code>
-                                    }
-                                    // fenced code block
-                                    return (
-                                      <pre 
-                                        {...props}
-                                        style={{
-                                          backgroundColor: '#d4edda',
-                                          padding: '10px',
-                                          borderRadius: '5px',
-                                          overflowX: 'auto'
-                                        }}
-                                      >
-                                        <code className={className}>{children}</code>
-                                      </pre>
-                                    )
-                                  }
-                                }}
-                              >
-                                {q.answer}
-                              </ReactMarkdown>
-                            </div>
-                          )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )} 
-            */}
-            {questions.length > 0 && (
-              <div className="mt-5">
-                <h5>Generated Questions:</h5>
+                <h5>Generated Questionssy:</h5>
                 {questions.map((q, idx) => {
                   // Detect MCQ by looking for lines like "A. option"
                   const lines = q.question.split('\n');
@@ -675,7 +715,7 @@ export default function ExamGenerator({ user }) {
 
                   return (
                     <div key={idx} className="card mb-3">
-                      <div className="card-body">
+                      <div className="card-body" style={{ overflowX: 'hidden' }}>
                         
                         {isMCQ ? (
                           <h6>{lines[0]}</h6>
@@ -716,13 +756,14 @@ export default function ExamGenerator({ user }) {
                         )}
 
                         {/* Render the answer if available */}
-                        {q.showAnswer && (
+                        {/* {q.showAnswer && (
                           <div
-                            className="alert alert-success mt-3"
+                            className="alert alert-success mt-3 text-break mw-100 w-100"
                             style={{
-                              wordBreak: 'break-word',
-                              whiteSpace: 'pre-wrap',
-                              overflowWrap: 'anywhere',
+                              maxWidth: '100%',
+                              wordBreak: 'break-word',      // forces breaks even inside long strings
+                              overflowWrap: 'break-word',  // wrap at word boundaries when possible
+                              whiteSpace: 'pre-wrap',      // preserve manual line breaks
                             }}
                           >
                             <strong>Answer:</strong>
@@ -736,11 +777,15 @@ export default function ExamGenerator({ user }) {
                                   return (
                                     <pre
                                       {...props}
+                                      className="p-2 rounded overflow-auto text-break"
                                       style={{
                                         backgroundColor: '#d4edda',
-                                        padding: '10px',
-                                        borderRadius: '5px',
+                                        padding: '5px',
+                                        borderRadius: '4px',
                                         overflowX: 'auto',
+                                        maxWidth: '100%',
+                                        overflowX: 'auto',
+                                        wordBreak: 'pre-wrap',
                                       }}
                                     >
                                       <code className={className}>{children}</code>
@@ -753,6 +798,29 @@ export default function ExamGenerator({ user }) {
                             </ReactMarkdown>
                           </div>
                           
+                        )} */}
+
+                        {q.showAnswer && (
+                          <div className="alert alert-success mt-3 answer-container">
+                            <strong>Answer:</strong>
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                code({ inline, className, children, ...props }) {
+                                  if (inline) {
+                                    return <code {...props} className={className}>{children}</code>;
+                                  }
+                                  return (
+                                    <pre {...props}>
+                                      <code className={className}>{children}</code>
+                                    </pre>
+                                  );
+                                }
+                              }}
+                            >
+                              {q.answer}
+                            </ReactMarkdown>
+                          </div>
                         )}
                       </div>
                       {/* Add the "X" button */}

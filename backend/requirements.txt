@@ -20,3 +20,6 @@ pdf2image
 PyMuPDF
 Pillow
 pdfplumber
+torch>=2.4.1
+transformers>=4.44.2
+accelerate>=0.33.0

@@ -3,11 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pdfminer.high_level import extract_text
 from pydantic import BaseModel
-import fitz  # PyMuPDF for native text extraction
-from pdf2image import convert_from_path
-import pdfplumber
-from PIL import Image
-import pytesseract
+import pdfkit
 import openai
 import os
 import re
@@ -16,10 +12,6 @@ from pydantic import BaseModel
 from typing import Optional
 import razorpay
 from fastapi.staticfiles import StaticFiles
-import json
-import io
-import pdfkit
-
 
 app = FastAPI()
 
@@ -108,22 +100,18 @@ async def create_order(order: OrderRequest):
 
 
 # --- Upload syllabus and extract text ---
-# @app.post("/api/upload-syllabus")
-# async def upload_syllabus(file: UploadFile = File(...)):
-#     contents = await file.read()
-#     with open(TEMP_PDF, "wb") as f:
-#         f.write(contents)
-#     try:
-#         text = extract_text_from_pdf(TEMP_PDF)
-#         if not text:
-#             raise Exception("No extractable text found in PDF (native + OCR).")
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"PDF text extraction failed: {e}")
-
-#     with open(SYLLABUS_TXT, "w", encoding="utf-8") as f:
-#         f.write(text)
-#     return {"text": text}
-
+@app.post("/api/upload-syllabus")
+async def upload_syllabus(file: UploadFile = File(...)):
+    contents = await file.read()
+    with open(TEMP_PDF, "wb") as f:
+        f.write(contents)
+    try:
+        text = extract_text(TEMP_PDF)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF parse error: {e}")
+    with open(SYLLABUS_TXT, "w", encoding="utf-8") as f:
+        f.write(text)
+    return {"text": text}
 
 # --- Models ---
 class TextIn(BaseModel):
@@ -184,6 +172,65 @@ async def generate_questions(payload: TextIn):
     ]
     return {"questions": questions}
 
+# --- Generate questions by chapter with dynamic types and counts ---
+@app.post("/api/nlp-generate-questions-by-chapter")
+async def generate_questions_by_chapter(payload: ChapterIn):
+    chapter = payload.chapter.strip()
+    n = payload.numQuestions
+    # Determine types
+    types = []
+    if payload.mcq:        types.append("MCQ")
+    if payload.shortAnswer: types.append("short answer")
+    if payload.longAnswer:  types.append("long answer")
+    if not types:
+        raise HTTPException(status_code=400, detail="Select at least one question type.")
+    types_str = ", ".join(types)
+
+    if not chapter:
+        raise HTTPException(status_code=400, detail="Chapter name is required.")
+    try:
+        syllabus_text = open(SYLLABUS_TXT, "r", encoding="utf-8").read()
+    except FileNotFoundError:
+        raise HTTPException(status_code=400, detail="No syllabus uploaded.")
+
+    text_lower = syllabus_text.lower()
+    start_idx = text_lower.find(chapter.lower())
+    if start_idx == -1:
+        raise HTTPException(status_code=404, detail="Chapter not found in syllabus.")
+
+    # find next UNIT marker
+    next_units = [
+        m.start() for m in re.finditer(r"(?:unit[\s\-]*\d+\b)", text_lower)
+        if m.start() > start_idx
+    ]
+    end_idx = next_units[0] if next_units else len(syllabus_text)
+    chapter_content = syllabus_text[start_idx:end_idx].strip()
+
+    system_prompt = (
+        f"You are an expert question generator. Based on the following syllabus section, "
+        f"generate {n} {types_str} question{'s' if n>1 else ''} relevant to it."
+    )
+    try:
+        resp = openai.ChatCompletion.create(
+            model="openai/gpt-4-turbo",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": chapter_content},
+            ],
+            temperature=0.7,
+            max_tokens=300,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"API call failed: {e}")
+
+    if "choices" not in resp or not resp["choices"]:
+        raise HTTPException(status_code=502, detail="No choices returned.")
+    raw = resp["choices"][0]["message"]["content"].strip()
+    questions = [
+        line.lstrip("0123456789. ").strip()
+        for line in raw.split("\n") if line.strip()
+    ]
+    return {"chapter": chapter, "questions": questions}
 
 
 # main.py
@@ -303,81 +350,23 @@ async def generate_answer(req: AnswerRequest):
 
 # … your existing imports and setup …
 
-import tempfile
-
-tessdata_dir = os.path.join(os.getcwd(), 'tessdata')
-os.environ['TESSDATA_PREFIX'] = tessdata_dir
-
-
-
-def extract_text_from_pdf(path: str) -> str:
-    """ Extract text from PDF — native first, OCR fallback """
-    text_chunks = []
-    try:
-        doc = fitz.open(path)
-        for page in doc:
-            chunk = page.get_text()
-            if chunk:
-                text_chunks.append(chunk)
-    except Exception as e:
-        print(f"[native PDF extract] error: {e}")
-
-    full_text = "\n".join(text_chunks).strip()
-
-    if not full_text:
-        print("→ No native text found – falling back to OCR on PDF pages")
-        try:
-            pages = convert_from_path(path, dpi=300)
-            ocr_texts = []
-            for img in pages:
-                ocr_texts.append(pytesseract.image_to_string(img))
-            full_text = "\n".join(ocr_texts).strip()
-        except Exception as e:
-            print(f"[PDF OCR] error: {e}")
-
-    return full_text
-
-def extract_text_from_image(path: str) -> str:
-    """ Extract text from image using OCR """
-    try:
-        img = Image.open(path)
-        return pytesseract.image_to_string(img).strip()
-    except Exception as e:
-        print(f"[image OCR] error: {e}")
-        return ""
-
 @app.post("/api/upload-question-paper")
 async def upload_question_paper(file: UploadFile = File(...)):
-    """ Upload PDF/JPEG → Extract Questions → Return JSON """
-    suffix = os.path.splitext(file.filename)[1].lower()
-    if suffix not in [".pdf", ".jpg", ".jpeg"]:
-        raise HTTPException(status_code=400, detail="Unsupported file type")
+    # 1) Save PDF
+    contents = await file.read()
+    tmp_path = "uploaded_question_paper.pdf"
+    with open(tmp_path, "wb") as f:
+        f.write(contents)
 
+    # 2) Extract raw text
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            contents = await file.read()
-            tmp.write(contents)
-            tmp_path = tmp.name
+        raw = extract_text(tmp_path)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"File save error: {e}")
+        raise HTTPException(status_code=500, detail=f"PDF parse error: {e}")
 
-    # Extract text from file
-    raw_text = ""
-    try:
-        if suffix == ".pdf":
-            raw_text = extract_text_from_pdf(tmp_path)
-        else:
-            raw_text = extract_text_from_image(tmp_path)
-    finally:
-        os.remove(tmp_path)
-
-    if not raw_text:
-        raise HTTPException(status_code=500, detail="Could not extract any text from file.")
-
-    # Optional: Find "No. of Questions"
-    match = re.search(r'No\.?\s*of\s*Questions\s*[:\-]?\s*(\d+)', raw_text, flags=re.I)
+    match = re.search(r'No\.?\s*of\s*Questions\s*[:\-]?\s*(\d+)', raw, flags=re.I)
     total_q = int(match.group(1)) if match else None
-
+    # 3) Ask OpenAI to return ONLY the numbered exam questions (JSON array)
     n_txt = f" The paper states there are {total_q} questions." if total_q else ""
     system_prompt = f"""
         You are an assistant that receives the full text of an exam paper (including headings, instructions, passages, and questions).
@@ -387,188 +376,61 @@ async def upload_question_paper(file: UploadFile = File(...)):
 
         Where:
         - Each item in the "questions" array is a full question or sub-question, in the order it appears.
-        - Include ALL types of questions.
+        - Include ALL types of questions: 
+        - Standard numbered questions (e.g., "1.", "2.")
+        - Sub-questions from reading passages or comprehension sections (e.g., "(a)", "(b)", etc.)
+        - Fill-in-the-blanks, matching, MCQs, essay questions — everything.
         - Remove all numbering or lettering ("1.", "(a)", etc.) from each question text.
-        - DO NOT include general instructions or answers.
+        - DO NOT exclude comprehension questions. Questions referring to a passage or text must be included.
+        - DO NOT include general instructions like "Answer any six", "Read the passage", etc.
+        - DO NOT include answers, explanations, or anything outside of the JSON.
 
         {n_txt}
 
         Return ONLY a valid JSON object. Do not include commentary or markdown.
-    """.strip()
+        """.strip()
 
     questions = []
     try:
         resp = openai.ChatCompletion.create(
             model="openai/gpt-4-turbo",
             messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": raw_text}
+                {"role": "system", "content": system_prompt.strip()},
+                {"role": "user", "content": raw}
             ],
             temperature=0.0,
             max_tokens=1500,
         )
-        resp_content = resp.choices[0].message.content.strip()
-        obj = json.loads(resp_content)
-        questions = [q.strip() for q in obj.get("questions", []) if isinstance(q, str) and q.strip()]
-    except Exception as e:
-        print(f"[OpenAI parse fallback] {e}")
+        arr = json.loads(resp.choices[0].message.content.strip())
+        # Accept any non-empty strings
+        questions = [q.strip() for q in arr if isinstance(q, str) and q.strip()]
+    except Exception:
+        # 4) Fallback: regex-find all `1. …`, `2. …` blocks
 
-        # Fallback regex (numbered or lettered questions)
         fallback_matches = re.findall(
             r'(\d+\.\s+.*?(?=\n\d+\.|\Z))|(\([a-z]\)\s+.*?(?=\n\([a-z]\)|\n\d+\.|\Z))',
-            raw_text,
+            raw,
             flags=re.S | re.I
         )
         questions = [m[0] or m[1] for m in fallback_matches if m[0] or m[1]]
-
-    if not questions:
-        raise HTTPException(status_code=500, detail="Could not extract questions from paper.")
-
-    return {"questions": questions}
-
-TEMP_PDF = "temp_syllabus.pdf"
-SYLLABUS_TXT = "syllabus.txt"
-
-@app.post("/api/upload-syllabus")
-async def upload_syllabus(file: UploadFile = File(...)):
-    # 1) Determine extension
-    suffix = os.path.splitext(file.filename)[1].lower()
-    if suffix not in [".pdf", ".jpg", ".jpeg"]:
-        raise HTTPException(status_code=400, detail="Unsupported file type. Only PDF, JPG or JPEG allowed.")
-
-    # 2) Save uploaded data
-    contents = await file.read()
-    if suffix == ".pdf":
-        # overwrite the standard temp PDF
-        with open(TEMP_PDF, "wb") as f:
-            f.write(contents)
-        # 3a) Extract from PDF
-        text = extract_text_from_pdf(TEMP_PDF)
-        # but if your PDF has **no** native text, fall back to OCR of its pages:
-        if not text.strip():
-            text = extract_text_from_image(TEMP_PDF)
-    else:
-        # 2b) It's JPG/JPEG → save to a temp image file
-        image_path = f"temp_syllabus_image{suffix}"
-        with open(image_path, "wb") as f:
-            f.write(contents)
-        # 3b) Extract from image via your existing OCR
-        text = extract_text_from_image(image_path)
-        # clean up the temp image
-        os.remove(image_path)
-
-    # 4) Validate + persist
-    if not text.strip():
-        raise HTTPException(status_code=500, detail="Could not extract any text from file.")
-    with open(SYLLABUS_TXT, "w", encoding="utf-8") as f:
-        f.write(text)
-
-    return {"text": text}
+        #matches = re.findall(r'\d+\.\s+(.*?)(?=\n\d+\.|\Z)', raw, flags=re.S)
+        #questions = [m.strip() for m in matches if m.strip()]
 
 
-# --- Generate questions by chapter with dynamic types and counts ---
-@app.post("/api/nlp-generate-questions-by-chapter")
-async def generate_questions_by_chapter(payload: ChapterIn):
-    chapter = payload.chapter.strip()
-    n = payload.numQuestions
-    # Determine types
-    types = []
-    if payload.mcq:        types.append("MCQ")
-    if payload.shortAnswer: types.append("short answer")
-    if payload.longAnswer:  types.append("long answer")
-    if not types:
-        raise HTTPException(status_code=400, detail="Select at least one question type.")
-    types_str = ", ".join(types)
 
-    if not chapter:
-        raise HTTPException(status_code=400, detail="Chapter name is required.")
-    try:
-        syllabus_text = open(SYLLABUS_TXT, "r", encoding="utf-8").read()
-    except FileNotFoundError:
-        raise HTTPException(status_code=400, detail="No syllabus uploaded.")
-
-    text_lower = syllabus_text.lower()
-    start_idx = text_lower.find(chapter.lower())
-    if start_idx == -1:
-        raise HTTPException(status_code=404, detail="Chapter not found in syllabus.")
-
-    # find next UNIT marker
-    next_units = [
-        m.start() for m in re.finditer(r"(?:unit[\s\-]*\d+\b)", text_lower)
-        if m.start() > start_idx
+    
+    # 5) Filter out instructional text
+    instruction_keywords = [
+        "limit", "write", "choose", "answer the following", "prescribed", "guidelines"
     ]
-    end_idx = next_units[0] if next_units else len(syllabus_text)
-    chapter_content = syllabus_text[start_idx:end_idx].strip()
-
-    system_prompt = (
-        f"You are an expert question generator. Based on the following syllabus section, "
-        f"generate {n} {types_str} question{'s' if n>1 else ''} relevant to it."
-    )
-    try:
-        resp = openai.ChatCompletion.create(
-            model="openai/gpt-4-turbo",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": chapter_content},
-            ],
-            temperature=0.7,
-            max_tokens=300,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"API call failed: {e}")
-
-    if "choices" not in resp or not resp["choices"]:
-        raise HTTPException(status_code=502, detail="No choices returned.")
-    raw = resp["choices"][0]["message"]["content"].strip()
-    questions = [
-        line.lstrip("0123456789. ").strip()
-        for line in raw.split("\n") if line.strip()
+    filtered_questions = [
+        q for q in questions
+        if not any(keyword in q.lower() for keyword in instruction_keywords)
     ]
-    return {"chapter": chapter, "questions": questions}
 
-
-class QuestionIn(BaseModel):
-    question: str
-
-@app.post("/api/nlp-generate-answer-to-question")
-async def generate_answer_to_question(payload: QuestionIn):
-    user_question = payload.question.strip()
-
-    if not user_question:
-        raise HTTPException(status_code=400, detail="Question is required.")
-
-    # Load already uploaded + extracted syllabus text
-    try:
-        syllabus_text = open(SYLLABUS_TXT, "r", encoding="utf-8").read()
-    except FileNotFoundError:
-        raise HTTPException(status_code=400, detail="No syllabus uploaded.")
-
-    # Build system prompt
-    system_prompt = (
-        "You are an expert academic assistant. Using the provided syllabus content, "
-        "answer the user's question clearly, concisely, and accurately. "
-        "Only answer if relevant information is found. If not found, say 'Information not found in syllabus.'"
-    )
-
-    try:
-        resp = openai.ChatCompletion.create(
-            model="gpt-4-turbo",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": f"Syllabus content:\n\n{syllabus_text}\n\nUser question: {user_question}"},
-            ],
-            temperature=0.3,
-            max_tokens=400,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"API call failed: {e}")
-
-    if "choices" not in resp or not resp["choices"]:
-        raise HTTPException(status_code=502, detail="No choices returned.")
-
-    answer = resp["choices"][0]["message"]["content"].strip()
-
-    return {"question": user_question, "answer": answer}
+    if not filtered_questions:
+        raise HTTPException(status_code=404, detail="No valid questions found in the uploaded paper.")
+    return {"questions": filtered_questions}
 
 
 # Serve static assets under /static
