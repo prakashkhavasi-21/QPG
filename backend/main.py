@@ -1,6 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from pdfminer.high_level import extract_text
 from pydantic import BaseModel
 import fitz  # PyMuPDF for native text extraction
@@ -10,7 +10,6 @@ from PIL import Image
 import pytesseract
 import os
 import re
-from fastapi import Depends
 from pydantic import BaseModel
 from typing import Optional
 import razorpay
@@ -23,30 +22,21 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.enums import TA_LEFT
 import tempfile
+from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
 app = FastAPI()
-
-@app.get("/api/health")
-def health_check():
-    return {"status": "ok"}
 
 # Razorpay Configuration
 RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID')
 RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET')
 razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
-# Qwen 3 Model Setup
-MODEL_NAME = "Qwen/Qwen3-8B"
-device = "cuda" if torch.cuda.is_available() else "cpu"
+# Initialize Hugging Face model and tokenizer
+MODEL_NAME = "t5-small"
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModelForCausalLM.from_pretrained(
-    MODEL_NAME,
-    torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-    device_map="auto"
-)
-model.eval()
+model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME)
+generator = pipeline("text2text-generation", model=model, tokenizer=tokenizer, device=0 if torch.cuda.is_available() else -1)
 
 # CORS Middleware
 origins = [
@@ -154,22 +144,25 @@ def extract_text_from_image(path: str) -> str:
         print(f"[image OCR] error: {e}")
         return ""
 
-def generate_qwen_response(prompt, max_tokens=400, use_thinking_mode=True):
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": f"{'/think' if use_thinking_mode else '/no_think'} {prompt}"}
-    ]
-    text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    inputs = tokenizer(text, return_tensors="pt").to(device)
-    outputs = model.generate(
-        **inputs,
-        max_new_tokens=max_tokens,
-        temperature=0.7,
-        top_p=0.9,
-        do_sample=True
-    )
-    response = tokenizer.decode(outputs[0][len(inputs.input_ids[0]):], skip_special_tokens=True)
-    return response.strip()
+async def generate_hf_response(prompt: str, max_tokens: int = 400, use_thinking_mode: bool = True) -> str:
+    try:
+        # Adjust prompt for T5 (T5 expects a task prefix)
+        task_prefix = "generate questions: " if "question" in prompt.lower() else "answer question: "
+        input_text = f"{task_prefix}{prompt}"
+
+        # Generate response using the pipeline
+        response = generator(
+            input_text,
+            max_length=max_tokens,
+            num_return_sequences=1,
+            do_sample=True,
+            top_p=0.9,
+            temperature=0.7
+        )[0]["generated_text"]
+
+        return response.strip()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Hugging Face model inference error: {str(e)}")
 
 # --- Endpoints ---
 @app.post("/api/upload-syllabus")
@@ -215,11 +208,13 @@ async def generate_questions(payload: TextIn):
         f"Return only the questions, one per line, without numbering."
     )
     try:
-        response = generate_qwen_response(f"{system_prompt}\n\nText:\n{full_text}", max_tokens=400)
+        response = await generate_hf_response(f"{system_prompt}\n\nText:\n{full_text}", max_tokens=400)
+        print("Hugging Face Raw Response:", response)
         questions = [q.strip() for q in response.split("\n") if q.strip()]
+        print("Processed Questions:", questions)
         return {"questions": questions[:n]}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Qwen 3 inference error: {e}")
+        raise HTTPException(status_code=500, detail=f"Hugging Face inference error: {e}")
 
 @app.post("/api/upload-question-paper")
 async def upload_question_paper(file: UploadFile = File(...)):
@@ -248,27 +243,25 @@ async def upload_question_paper(file: UploadFile = File(...)):
     n_txt = f" The paper states there are {total_q} questions." if total_q else ""
     system_prompt = f"""
         You are an assistant that receives the full text of an exam paper (including headings, instructions, passages, and questions).
-        Your task is to return a JSON object: {{"questions": ["..."]}}
-        Where:
-        - Each item in the "questions" array is a full question or sub-question, in order.
+        Your task is to extract all questions and return them as a list of strings, one question per line.
         - Include ALL types of questions.
         - Remove all numbering or lettering ("1.", "(a)", etc.) from each question text.
         - DO NOT include general instructions or answers.
         {n_txt}
-        Return ONLY a valid JSON object.
+        Return only the questions, one per line.
     """.strip()
     try:
-        response = generate_qwen_response(system_prompt + f"\n\n{raw_text}", max_tokens=1500, use_thinking_mode=False)
-        obj = json.loads(response)
-        questions = [q.strip() for q in obj.get("questions", []) if isinstance(q, str) and q.strip()]
+        response = await generate_hf_response(system_prompt + f"\n\n{raw_text}", max_tokens=1500, use_thinking_mode=False)
+        questions = [q.strip() for q in response.split("\n") if q.strip()]
+        return {"questions": questions}
     except Exception as e:
-        print(f"[Qwen 3 parse fallback] {e}")
-        fallback_matches = re.findall(
+        print(f"[Hugging Face parse fallback] {e}")
+        fallback_matches = re.finditer(
             r'(\d+\.\s+.*?(?=\n\d+\.|\Z))|(\([a-z]\)\s+.*?(?=\n\([a-z]\)|\n\d+\.|\Z))',
             raw_text,
             flags=re.S | re.I
         )
-        questions = [m[0] or m[1] for m in fallback_matches if m[0] or m[1]]
+        questions = [m.group(0) for m in fallback_matches]
     if not questions:
         raise HTTPException(status_code=500, detail="Could not extract questions from paper.")
     return {"questions": questions}
@@ -306,11 +299,11 @@ async def generate_questions_by_chapter(payload: ChapterIn):
         f"Return only the questions, one per line, without numbering."
     )
     try:
-        response = generate_qwen_response(f"{system_prompt}\n\n{chapter_content}", max_tokens=300)
+        response = await generate_hf_response(f"{system_prompt}\n\n{chapter_content}", max_tokens=300)
         questions = [q.strip() for q in response.split("\n") if q.strip()]
         return {"chapter": chapter, "questions": questions[:n]}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Qwen 3 inference error: {e}")
+        raise HTTPException(status_code=500, detail=f"Hugging Face inference error: {e}")
 
 @app.post("/api/generate-answer")
 async def generate_answer(req: AnswerRequest):
@@ -321,10 +314,11 @@ async def generate_answer(req: AnswerRequest):
         "You are an expert tutor. Provide a clear, concise answer to the following question."
     )
     try:
-        response = generate_qwen_response(f"{system_prompt}\n\nQuestion: {question}", max_tokens=300)
+        response = await generate_hf_response(f"{system_prompt}\n\nQuestion: {
+System: question}", max_tokens=300)
         return {"answer": response}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Qwen 3 inference error: {e}")
+        raise HTTPException(status_code=500, detail=f"Hugging Face inference error: {e}")
 
 @app.post("/api/nlp-generate-answer-to-question")
 async def generate_answer_to_question(payload: QuestionIn):
@@ -341,13 +335,13 @@ async def generate_answer_to_question(payload: QuestionIn):
         "If no relevant information is found, say 'Information not found in syllabus.'"
     )
     try:
-        response = generate_qwen_response(
+        response = await generate_hf_response(
             f"{system_prompt}\n\nSyllabus content:\n{syllabus_text}\n\nUser question: {user_question}",
             max_tokens=400
         )
         return {"question": user_question, "answer": response}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Qwen 3 inference error: {e}")
+        raise HTTPException(status_code=500, detail=f"Hugging Face inference error: {e}")
 
 @app.post("/api/export-pdf")
 async def export_pdf(request: Request):
@@ -383,42 +377,30 @@ async def export_pdf(request: Request):
     q_items = []
 
     for idx, q in enumerate(questions, start=1):
-        text = q.get("question", "").replace("\n", "<br/>")
+        stem = q.get("stem", "")
+        options = q.get("options", [])
         marks = q.get("marks", "")
 
-        # Split the question into lines to check for MCQ format
-        lines = text.split("<br/>")
-        is_mcq = any(re.match(r'^[A-Da-d1-4][).]\s+', line.strip()) for line in lines[1:])
+        # Prepare the question item elements (stem + options for MCQs, or just the stem for non-MCQs)
+        question_elements = []
 
-        if is_mcq:
-            # Extract the question stem (first line) and options (remaining lines)
-            question_text = lines[0].strip()
-            q_text = f".{question_text}"
-            if marks:
-                q_text += f"  <i>({marks} marks)</i>"
-            
-            # Create the question stem as a ListItem
-            question_item = ListItem(Paragraph(q_text, question_style), leftIndent=0)
+        # Add the question stem
+        q_text = f".{stem}"
+        if marks:
+            q_text += f"  <i>({marks} marks)</i>"
+        question_elements.append(Paragraph(q_text, question_style))
 
-            # Create a nested list for options
-            option_items = []
-            for opt in lines[1:]:
-                opt = opt.strip()
-                if opt and re.match(r'^[A-Da-d1-4][).]\s+', opt):
-                    option_items.append(ListItem(Paragraph(opt, option_style), leftIndent=10))
-            
-            # Combine the question and options into a nested ListFlowable
+        # Add options if present (MCQ)
+        if options:
+            option_items = [Paragraph(opt, option_style) for opt in options]
             nested_list = ListFlowable(option_items, bulletType='bullet', start='circle', leftIndent=20)
-            q_items.append([question_item, nested_list])
-        else:
-            # Non-MCQ question: treat as a single paragraph
-            q_text = f".{text}"
-            if marks:
-                q_text += f"  <i>({marks} marks)</i>"
-            q_items.append(ListItem(Paragraph(q_text, question_style), leftIndent=0))
+            question_elements.append(nested_list)
 
-    # Add the questions list to elements
-    elements.append(ListFlowable([item if isinstance(item, ListItem) else ListFlowable(item, bulletType='1') for item in q_items], bulletType="1", start="1", leftIndent=0))
+        # Add the question (with its options) as a single ListItem
+        q_items.append(ListItem(question_elements, leftIndent=0))
+
+    # Create the numbered list of questions
+    elements.append(ListFlowable(q_items, bulletType="1", start="1", leftIndent=0))
     elements.append(Spacer(1, 12))
 
     # Add answers if present
