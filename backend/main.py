@@ -173,7 +173,6 @@ async def generate_questions(payload: TextIn):
         {full_text}
 
         If MCQs are requested:
-        - For each MCQ, provide four answer choices labeled (a), (b), (c), (d).
         - Mark the correct choice with “*” before the letter.
 
         Return ONLY the questions (and choices), one per line—no commentary, no preamble.
