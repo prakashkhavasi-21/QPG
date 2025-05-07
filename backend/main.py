@@ -161,10 +161,23 @@ async def generate_questions(payload: TextIn):
     types_str = ", ".join(types)
 
     n = payload.numQuestions
-    system_prompt = (
-        f"You are a question paper generator. Based on the following text, "
-        f"generate {n} {types_str} question{'s' if n>1 else ''} relevant to it."
-    )
+    # system_prompt = (
+    #     f"You are a question paper generator. Based on the following text, "
+    #     f"generate {n} {types_str} question{'s' if n>1 else ''} relevant to it."
+    # )
+
+    system_prompt = f"""
+        You are an expert question paper generator. Do NOT ask for clarification—just generate the questions.
+        Based solely on the following text, generate {n} {types_str} question{'s' if n>1 else ''}:
+
+        {full_text}
+
+        If MCQs are requested:
+        - For each MCQ, provide four answer choices labeled (a), (b), (c), (d).
+        - Mark the correct choice with “*” before the letter.
+
+        Return ONLY the questions (and choices), one per line—no commentary, no preamble.
+    """.strip()
 
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
