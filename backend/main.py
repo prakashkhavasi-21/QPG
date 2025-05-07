@@ -260,6 +260,7 @@ async def upload_question_paper(file: UploadFile = File(...)):
     if suffix not in [".pdf", ".jpg", ".jpeg"]:
         raise HTTPException(status_code=400, detail="Unsupported file type")
 
+    # Save upload to temp file
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             contents = await file.read()
@@ -268,28 +269,24 @@ async def upload_question_paper(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File save error: {e}")
 
-    # Extract text from file
-    raw_text = ""
+    # Extract text (PDF → native or OCR; image → OCR)
     try:
         if suffix == ".pdf":
             raw_text = extract_text_from_pdf(tmp_path)
-
-            # Fallback OCR for image-based PDF (if no text found)
-            if not raw_text.strip():
-                raw_text = extract_text_from_image(tmp_path)
         else:
             raw_text = extract_text_from_image(tmp_path)
     finally:
         os.remove(tmp_path)
 
-    if not raw_text:
+    if not raw_text.strip():
         raise HTTPException(status_code=500, detail="Could not extract any text from file.")
 
-    # Optional: Find "No. of Questions"
+    # Optional: detect stated number of questions
     match = re.search(r'No\.?\s*of\s*Questions\s*[:\-]?\s*(\d+)', raw_text, flags=re.I)
     total_q = int(match.group(1)) if match else None
-
     n_txt = f" The paper states there are {total_q} questions." if total_q else ""
+
+    # Build system prompt
     system_prompt = f"""
         You are an assistant that receives the full text of an exam paper (including headings, instructions, passages, and questions).
 
@@ -305,12 +302,10 @@ async def upload_question_paper(file: UploadFile = File(...)):
         {n_txt}
 
         Return ONLY a valid JSON object. Do not include commentary or markdown.
-    """.strip()
+        """.strip()
 
-        # … your temp‐file, OCR logic, `raw_text` generation stays the same …
-
-    questions = []  # ← initialize here
-
+    # Call Gemini
+    questions: list[str] = []  # ← initialize here
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content([
@@ -320,9 +315,13 @@ async def upload_question_paper(file: UploadFile = File(...)):
         resp_content = response.text.strip()
         print(f"[Gemini returned] >>>{resp_content}<<<")
 
-        if resp_content.startswith("{"):
+        # strip any ```json fences
+        resp_clean = re.sub(r"^```(?:json)?\s*", "", resp_content)
+        resp_clean = re.sub(r"\s*```$", "", resp_clean).strip()
+
+        if resp_clean.startswith("{"):
             try:
-                obj = json.loads(resp_content)
+                obj = json.loads(resp_clean)
                 questions = [
                     q.strip() for q in obj.get("questions", [])
                     if isinstance(q, str) and q.strip()
@@ -330,12 +329,12 @@ async def upload_question_paper(file: UploadFile = File(...)):
             except json.JSONDecodeError as je:
                 print(f"[JSONDecodeError] {je}")
         else:
-            print("[Gemini parse] response not JSON, falling back to regex")
+            print("[Gemini parse] cleaned response not JSON, falling back to regex")
 
     except Exception as e:
         print(f"[Gemini API error] {e}")
 
-    # Fallback regex if still no questions
+    # Fallback regex if necessary
     if not questions:
         fallback_matches = re.findall(
             r'(\d+\.\s+.*?(?=\n\d+\.|\Z))|(\([a-z]\)\s+.*?(?=\n\([a-z]\)|\n\d+\.|\Z))',
