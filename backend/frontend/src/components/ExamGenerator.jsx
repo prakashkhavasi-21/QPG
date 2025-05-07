@@ -65,10 +65,9 @@ export default function ExamGenerator({ user }) {
         const expires = snap.data().subscriptionExpires;
         setSubscriptionExpires(expires ? new Date(expires.seconds * 1000) : null);
       } else {
-        const nextMonth = new Date();
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
-        const expiryTimestamp = Timestamp.fromDate(nextMonth);
-        await setDoc(ref, { credits: 10, subscriptionExpires: expiryTimestamp });
+        const expiryDate = new Date();
+        const expiryDate1 = expiryDate.getMonth() + 1;
+        await setDoc(ref, { credits: 10, subscriptionExpires: expiryDate1 });
         setCredits(10);
       }
     };
