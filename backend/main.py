@@ -273,6 +273,10 @@ async def upload_question_paper(file: UploadFile = File(...)):
     try:
         if suffix == ".pdf":
             raw_text = extract_text_from_pdf(tmp_path)
+
+            # Fallback OCR for image-based PDF (if no text found)
+            if not raw_text.strip():
+                raw_text = extract_text_from_image(tmp_path)
         else:
             raw_text = extract_text_from_image(tmp_path)
     finally:
