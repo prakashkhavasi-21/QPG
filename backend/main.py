@@ -24,6 +24,12 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.enums import TA_LEFT
+import logging
+from tenacity import retry, stop_after_attempt, wait_fixed
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -92,37 +98,43 @@ async def create_order(order: OrderRequest):
         raise HTTPException(status_code=500, detail=f"Payment order creation failed: {e}")
 
 # --- Text Extraction Functions ---
-# def extract_text_from_pdf(path: str) -> str:
-#     text_chunks = []
-#     try:
-#         doc = fitz.open(path)
-#         for page in doc:
-#             chunk = page.get_text()
-#             if chunk:
-#                 text_chunks.append(chunk)
-#     except Exception as e:
-#         print(f"[native PDF extract] error: {e}")
+def extract_text_from_pdf(path: str) -> str:
+    text_chunks = []
+    try:
+        doc = fitz.open(path)
+        for page in doc:
+            chunk = page.get_text()
+            if chunk:
+                text_chunks.append(chunk)
+    except Exception as e:
+        logger.error(f"[native PDF extract] error: {e}")
 
-#     full_text = "\n".join(text_chunks).strip()
-#     if not full_text:
-#         print("→ No native text found – falling back to OCR on PDF pages")
-#         try:
-#             pages = convert_from_path(path, dpi=300)
-#             ocr_texts = []
-#             for img in pages:
-#                 ocr_texts.append(pytesseract.image_to_string(img))
-#             full_text = "\n".join(ocr_texts).strip()
-#         except Exception as e:
-#             print(f"[PDF OCR] error: {e}")
-#     return full_text
+    full_text = "\n".join(text_chunks).strip()
+    if not full_text:
+        logger.info("→ No native text found – falling back to OCR on PDF pages")
+        try:
+            pages = convert_from_path(path, dpi=300)
+            ocr_texts = []
+            for img in pages:
+                img = img.convert('L')  # Convert to grayscale
+                img = ImageEnhance.Contrast(img).enhance(2.0)  # Increase contrast
+                ocr_text = pytesseract.image_to_string(img).strip()
+                ocr_texts.append(ocr_text)
+            full_text = "\n".join(ocr_texts).strip()
+        except Exception as e:
+            logger.error(f"[PDF OCR] error: {e}")
+    return full_text
 
-# def extract_text_from_image(path: str) -> str:
-#     try:
-#         img = Image.open(path)
-#         return pytesseract.image_to_string(img).strip()
-#     except Exception as e:
-#         print(f"[image OCR] error: {e}")
-#         return ""
+def extract_text_from_image(path: str) -> str:
+    try:
+        img = Image.open(path)
+        img = img.convert('L')  # Convert to grayscale
+        img = ImageEnhance.Contrast(img).enhance(2.0)  # Increase contrast
+        text = pytesseract.image_to_string(img).strip()
+        return text
+    except Exception as e:
+        logger.error(f"[image OCR] error: {e}")
+        return ""
 
 # --- Models ---
 class TextIn(BaseModel):
@@ -210,125 +222,6 @@ async def generate_answer(req: AnswerRequest):
         raise HTTPException(status_code=502, detail=f"Gemini API error: {e}")
 
 # --- Upload Question Paper ---
-# @app.post("/api/upload-question-paper")
-# async def upload_question_paper(file: UploadFile = File(...)):
-#     suffix = os.path.splitext(file.filename)[1].lower()
-#     if suffix not in [".pdf", ".jpg", ".jpeg"]:
-#         raise HTTPException(status_code=400, detail="Unsupported file type")
-
-#     try:
-#         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-#             contents = await file.read()
-#             tmp.write(contents)
-#             tmp_path = tmp.name
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"File save error: {e}")
-
-#     raw_text = ""
-#     try:
-#         if suffix == ".pdf":
-#             raw_text = extract_text_from_pdf(tmp_path)
-#             if not raw_text.strip():
-#                 raw_text = extract_text_from_image(tmp_path)
-#         else:
-#             raw_text = extract_text_from_image(tmp_path)
-#     finally:
-#         os.remove(tmp_path)
-
-#     if not raw_text.strip():
-#         raise HTTPException(status_code=500, detail="Could not extract any text from file.")
-
-#     match = re.search(r'No\.?\s*of\s*Questions\s*[:\-]?\s*(\d+)', raw_text, flags=re.I)
-#     total_q = int(match.group(1)) if match else None
-#     n_txt = f" The paper states there are {total_q} questions." if total_q else ""
-
-#     system_prompt = f"""
-#         You are an assistant that receives the full text of an exam paper (including headings, instructions, passages, and questions).
-
-#         Your task is to return a JSON object in the following format:
-#         {{"questions": ["..."]}}
-
-#         Where:
-#         - Each item in the "questions" array is a full question or sub-question, in the order it appears.
-#         - Include ALL types of questions.
-#         - Remove all numbering or lettering ("1.", "(a)", etc.) from each question text.
-#         - Remove all answer choices/options from multiple-choice or similar questions. Include ONLY the main question text.
-#         - Do NOT include any other text, such as headings, instructions, or answer choices.
-#         - Do NOT include any additional commentary or explanations.
-#         - DO NOT include general instructions or answers.
-
-#         {n_txt}
-
-#         Return ONLY a valid JSON object. Do not include commentary or markdown.
-#     """.strip()
-
-#     try:
-#         model = genai.GenerativeModel('gemini-1.5-flash')
-#         response = model.generate_content(
-#             system_prompt + "\n\n" + raw_text,
-#             generation_config=genai.types.GenerationConfig(
-#                 temperature=0.0,
-#                 max_output_tokens=1500
-#             )
-#         )
-#         resp_content = response.text.strip()
-#         obj = json.loads(resp_content)
-#         questions = [q.strip() for q in obj.get("questions", []) if isinstance(q, str) and q.strip()]
-#     except Exception as e:
-#         print(f"[Gemini parse fallback] {e}")
-#         fallback_matches = re.findall(
-#             r'(\d+\.\s+.*?(?=\n\d+\.|\Z))|(\([a-z]\)\s+.*?(?=\n\([a-z]\)|\n\d+\.|\Z))',
-#             raw_text,
-#             flags=re.S | re.I
-#         )
-#         questions = [m[0] or m[1] for m in fallback_matches if m[0] or m[1]]
-
-#     if not questions:
-#         raise HTTPException(status_code=500, detail="Could not extract questions from paper.")
-
-#     return {"questions": questions}
-
-
-
-def extract_text_from_pdf(path: str) -> str:
-    text_chunks = []
-    try:
-        doc = fitz.open(path)
-        for page in doc:
-            chunk = page.get_text()
-            if chunk:
-                text_chunks.append(chunk)
-    except Exception as e:
-        print(f"[native PDF extract] error: {e}")
-
-    full_text = "\n".join(text_chunks).strip()
-    if not full_text:
-        print("→ No native text found – falling back to OCR on PDF pages")
-        try:
-            pages = convert_from_path(path, dpi=300)
-            ocr_texts = []
-            for img in pages:
-                img = img.convert('L')  # Convert to grayscale
-                img = ImageEnhance.Contrast(img).enhance(2.0)  # Increase contrast
-                ocr_text = pytesseract.image_to_string(img).strip()
-                ocr_texts.append(ocr_text)
-            full_text = "\n".join(ocr_texts).strip()
-        except Exception as e:
-            print(f"[PDF OCR] error: {e}")
-    return full_text
-
-def extract_text_from_image(path: str) -> str:
-    try:
-        img = Image.open(path)
-        img = img.convert('L')  # Convert to grayscale
-        img = ImageEnhance.Contrast(img).enhance(2.0)  # Increase contrast
-        text = pytesseract.image_to_string(img).strip()
-        return text
-    except Exception as e:
-        print(f"[image OCR] error: {e}")
-        return ""
-
-# Upload Question Paper Endpoint
 @app.post("/api/upload-question-paper")
 async def upload_question_paper(file: UploadFile = File(...)):
     # Validate file type
@@ -343,7 +236,7 @@ async def upload_question_paper(file: UploadFile = File(...)):
             tmp.write(contents)
             tmp_path = tmp.name
     except Exception as e:
-        print(f"File save error: {e}")
+        logger.error(f"File save error: {e}")
         raise HTTPException(status_code=500, detail=f"File save error: {e}")
 
     # Extract text
@@ -357,7 +250,7 @@ async def upload_question_paper(file: UploadFile = File(...)):
         os.remove(tmp_path)
 
     if not raw_text.strip():
-        print("No text extracted from file")
+        logger.error("No text extracted from file")
         raise HTTPException(status_code=500, detail="Could not extract any text from file.")
 
     # Clean OCR text
@@ -377,7 +270,7 @@ async def upload_question_paper(file: UploadFile = File(...)):
     for pattern in headers:
         cleaned_text = re.sub(pattern, '', cleaned_text, flags=re.I)
     cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
-    print(f"Cleaned text (first 500 chars): {cleaned_text[:500]}")
+    logger.info(f"Cleaned text (first 500 chars): {cleaned_text[:500]}")
 
     # Extract total number of questions
     match = re.search(r'No\.?\s*of\s*Questions\s*[:\-]?\s*(\d+)', cleaned_text, flags=re.I)
@@ -398,6 +291,7 @@ async def upload_question_paper(file: UploadFile = File(...)):
         - DO NOT include general instructions, headers (e.g., "Total No. of Pages", "Max. Marks"), or answers.
         - For MCQs, include options in the question text (e.g., "Question? Options: A, B, C, D").
         - If the text is noisy, focus on extracting clear question text, ignoring artifacts.
+        - Ensure each question is complete and does not include trailing unrelated text.
 
         {n_txt}
 
@@ -405,33 +299,37 @@ async def upload_question_paper(file: UploadFile = File(...)):
     """.strip()
 
     questions = []
-    try:
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+    def call_gemini(prompt):
         model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content(
-            system_prompt + "\n\n" + cleaned_text,
+        return model.generate_content(
+            prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.0,
                 max_output_tokens=1500
             )
         )
+
+    try:
+        response = call_gemini(system_prompt + "\n\n" + cleaned_text)
         resp_content = response.text.strip()
-        print(f"Gemini response (first 500 chars): {resp_content[:500]}")
+        logger.info(f"Gemini response (first 500 chars): {resp_content[:500]}")
 
         if not resp_content:
-            print("Empty response from Gemini API")
+            logger.error("Empty response from Gemini API")
             raise ValueError("Empty response from Gemini API")
 
         try:
             obj = json.loads(resp_content)
             if not isinstance(obj, dict) or "questions" not in obj:
-                print("Invalid JSON structure from Gemini")
+                logger.error("Invalid JSON structure from Gemini")
                 raise ValueError("Invalid JSON structure from Gemini")
             questions = [q.strip() for q in obj.get("questions", []) if isinstance(q, str) and q.strip()]
         except json.JSONDecodeError as e:
-            print(f"JSON parse error: {e}")
+            logger.error(f"JSON parse error: {e}")
             raise ValueError(f"Invalid JSON from Gemini: {e}")
     except Exception as e:
-        print(f"[Gemini parse fallback] {e}")
+        logger.error(f"[Gemini parse fallback] {e}")
 
         # Fallback: Enhanced regex parsing
         lines = cleaned_text.split('\n')
@@ -444,43 +342,50 @@ async def upload_question_paper(file: UploadFile = File(...)):
                 continue
 
             # Skip headers/instructions
-            if any(keyword in line.lower() for keyword in ['total no. of pages', 'time', 'max. marks', 'answer any', 'degree examination', 'pto']):
+            if any(keyword in line.lower() for keyword in [
+                'total no. of pages', 'time', 'max. marks', 'answer any',
+                'degree examination', 'pto', 'question paper', 'instructions'
+            ]):
                 i += 1
                 continue
 
-            # Match question
-            question_match = re.match(r'(?:(?:\d+\.|\([a-z]\)|[a-z]\.|\d+\s*[a-z]\)|Q\d+\s*[a-z]\))\s+(.+?)(?:\s*\((\d+)\s*marks?\))?$', line, re.I)
+            # Match question with various numbering formats
+            question_match = re.match(
+                r'^(?:\d+\.|\([a-z]\)|[a-z]\.|\d+\s*[a-z]\)|Q\d+\s*[a-z]\.)\s+(.+?)(?:\s*\((\d+)\s*marks?\))?$',
+                line, re.I
+            )
             if question_match:
                 question_text = question_match.group(1).strip()
+                marks = question_match.group(2) if question_match.group(2) else None
                 # Check for MCQ options
                 options = []
                 j = i + 1
-                while j < len(lines) and re.match(r'(?:[a-d]\)|[a-d]\.\s+)', lines[j], re.I):
-                    option_text = re.sub(r'^[a-d]\)\s*|[a-d]\.\s*', '', lines[j]).strip()
-                    options.append(option_text)
+                while j < len(lines) and re.match(r'(?:[a-d]\)|[a-d]\.\s+|[A-D]\.\s+)', lines[j], re.I):
+                    option_text = re.sub(r'^[a-dA-D]\)\s*|[a-dA-D]\.\s*', '', lines[j]).strip()
+                    if option_text:
+                        options.append(option_text)
                     j += 1
                 if options:
                     question_text += f" Options: {', '.join(options)}"
                     i = j - 1
-                questions.append(question_text)
+                if question_text:
+                    questions.append(question_text)
                 i += 1
                 continue
 
             i += 1
 
-        print(f"Fallback extracted {len(questions)} questions")
+        logger.info(f"Fallback extracted {len(questions)} questions")
 
     if not questions:
-        print("No questions extracted after fallback")
+        logger.error("No questions extracted after fallback")
         raise HTTPException(
             status_code=500,
             detail="Could not extract questions from paper. The file may be of low quality or not contain recognizable questions."
         )
 
-    print(f"Final extracted {len(questions)} questions")
+    logger.info(f"Final extracted {len(questions)} questions")
     return {"questions": questions}
-
-
 
 # --- Upload Syllabus ---
 @app.post("/api/upload-syllabus")
