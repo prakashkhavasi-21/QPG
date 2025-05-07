@@ -307,34 +307,47 @@ async def upload_question_paper(file: UploadFile = File(...)):
         Return ONLY a valid JSON object. Do not include commentary or markdown.
     """.strip()
 
-    questions = []
+        # … your temp‐file, OCR logic, `raw_text` generation stays the same …
 
+    # 1) Call Gemini
+    resp_content = ""
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content([
             {"role": "user", "parts": [{"text": system_prompt}]},
             {"role": "user", "parts": [{"text": raw_text}]}
         ])
-
         resp_content = response.text.strip()
-        obj = json.loads(resp_content)
-        questions = [q.strip() for q in obj.get("questions", []) if isinstance(q, str) and q.strip()]
+        print(f"[Gemini returned] >>>{resp_content}<<<")
+
+        # 2) Try JSON parse only if it looks like JSON
+        if resp_content.startswith("{"):
+            try:
+                obj = json.loads(resp_content)
+                questions = [q.strip() for q in obj.get("questions", []) if isinstance(q, str) and q.strip()]
+            except json.JSONDecodeError as je:
+                print(f"[JSONDecodeError] {je}")
+        else:
+            print("[Gemini parse] response not JSON, falling back to regex")
 
     except Exception as e:
-        print(f"[Gemini parse fallback] {e}")
+        print(f"[Gemini API error] {e}")
 
-        # Fallback regex (same as before)
+    # 3) Fallback regex if JSON didn’t produce any questions
+    if not questions:
         fallback_matches = re.findall(
             r'(\d+\.\s+.*?(?=\n\d+\.|\Z))|(\([a-z]\)\s+.*?(?=\n\([a-z]\)|\n\d+\.|\Z))',
             raw_text,
             flags=re.S | re.I
         )
         questions = [m[0] or m[1] for m in fallback_matches if m[0] or m[1]]
+        print(f"[Fallback regex found] {len(questions)} questions")
 
     if not questions:
         raise HTTPException(status_code=500, detail="Could not extract questions from paper.")
 
     return {"questions": questions}
+
 
 
 # --- Upload Syllabus ---
