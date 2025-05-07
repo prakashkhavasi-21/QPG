@@ -343,7 +343,7 @@ async def upload_question_paper(file: UploadFile = File(...)):
             tmp.write(contents)
             tmp_path = tmp.name
     except Exception as e:
-        logger.error(f"File save error: {e}")
+        print(f"File save error: {e}")
         raise HTTPException(status_code=500, detail=f"File save error: {e}")
 
     # Extract text
