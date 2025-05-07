@@ -196,7 +196,7 @@ export default function Navbar({ user }) {
                       <h5 className="card-title">Free Trial</h5>
                       <p className="card-text flex-grow-1">
                         <span className="bullet">•</span> Start for free with <strong>10 Credit</strong>.<br/>
-                        <span className="bullet">•</span> 1 credit = 1 question generate.<br/>
+                        <span className="bullet">•</span> 1 credit = 1 question paper generate.<br/>
                         <span className="bullet">•</span> Quick and easy access.<br/>
                         <span className="bullet">•</span> Explore with your free trial.<br/>
                         <span className="bullet">•</span> Ideal for first-time users.<br/>

@@ -150,12 +150,18 @@ pre {
 }
 
 
-
+body {
+  background-color: #F5F7FA;
+  margin: 0;
+  padding: 0;
+}
 
 /* Exam Generator Styles */
 .exam-generator-container {
   font-family: 'Poppins', sans-serif;
-  background: linear-gradient(135deg, #F0F4F8 0%, #E3EDF7 100%);
+  background: linear-gradient(135deg, #cbd4dc 0%, #E6F0FA 100%);
+  min-height: 100vh;
+  padding-bottom: 60px;
 }
 
 .card {
@@ -178,7 +184,9 @@ pre {
   padding: 10px 20px;
   font-weight: 500;
   font-size: 1rem;
-  border: 2px solid transparent;
+  border: 2px solid #E3EDF7;
+  background: #E3EDF7;
+  color: #333;
 }
 
 .input-method-btn.active {
@@ -193,6 +201,19 @@ pre {
   color: white !important;
   transform: translateY(-2px);
   box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
+}
+
+.btn-outline-primary {
+  background: #E3EDF7;
+  color: #333;
+  border: 2px solid #E3EDF7;
+  transition: all 0.3s ease;
+}
+
+.btn-outline-primary:hover {
+  background: linear-gradient(90deg, #0056b3 0%, #00aaff 100%);
+  color: white;
+  border-color: transparent;
 }
 
 .form-control, .form-select {
@@ -330,7 +351,7 @@ pre {
 }
 
 .close-answer-btn:hover {
-  background-color: #e68600;
+  background-color: #e68a00;
   transform: scale(1.1);
 }
 
@@ -365,7 +386,7 @@ pre {
 }
 
 .btn-upgrade:hover {
-  background: linear-gradient(90deg, #e68600 0%, #e6b800 100%);
+  background: linear-gradient(90deg, #e68a00 0%, #e6b800 100%);
   transform: translateY(-2px);
   box-shadow: 0 4px 15px rgba(255, 149, 0, 0.3);
 }
@@ -430,7 +451,7 @@ pre {
   border-radius: 15px;
   box-shadow: 0 8px 25px rgba(0,0,0,0.2);
   border: none;
-  background: linear-gradient(135deg, #F0F4F8 0%, #E3EDF7 100%);
+  background: linear-gradient(135deg, #F0F4F8 0%, #E6F0FA 100%);
 }
 
 .modal-header {
@@ -492,6 +513,15 @@ pre {
   .input-method-btn {
     font-size: 0.9rem;
     padding: 8px 15px;
+    background: #E3EDF7;
+    color: #333;
+    border: 2px solid #E3EDF7;
+  }
+
+  .btn-outline-primary {
+    background: #E3EDF7;
+    color: #333;
+    border: 2px solid #E3EDF7;
   }
 
   .form-control, .form-select {
