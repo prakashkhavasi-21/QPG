@@ -20,4 +20,4 @@ pdf2image
 PyMuPDF
 Pillow
 pdfplumber
-cohere>=4.30
+google-generativeai==0.7.2

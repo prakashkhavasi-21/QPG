@@ -10,31 +10,34 @@ from PIL import Image
 import pytesseract
 import os
 import re
+from fastapi import Depends
+from pydantic import BaseModel
 from typing import Optional
 import razorpay
 from fastapi.staticfiles import StaticFiles
 import json
 import io
 import pdfkit
+import google.generativeai as genai
+import tempfile
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.enums import TA_LEFT
-import tempfile
-import cohere
 
 app = FastAPI()
 
-# Cohere Configuration
-COHERE_API_KEY = os.environ.get('COHERE_API_KEY')
-if not COHERE_API_KEY:
-    raise ValueError("COHERE_API_KEY environment variable not set")
-co = cohere.Client(COHERE_API_KEY)
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok"}
 
 # Razorpay Configuration
 RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID')
 RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET')
 razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+
+# Gemini API Configuration
+genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
 
 # CORS Middleware
 origins = [
@@ -88,28 +91,7 @@ async def create_order(order: OrderRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Payment order creation failed: {e}")
 
-# --- Models ---
-class TextIn(BaseModel):
-    text: str
-    numQuestions: int
-    mcq: bool
-    shortAnswer: bool
-    longAnswer: bool
-
-class ChapterIn(BaseModel):
-    chapter: str
-    numQuestions: int
-    mcq: bool
-    shortAnswer: bool
-    longAnswer: bool
-
-class QuestionIn(BaseModel):
-    question: str
-
-class AnswerRequest(BaseModel):
-    question: str
-
-# --- Helper Functions ---
+# --- Text Extraction Functions ---
 def extract_text_from_pdf(path: str) -> str:
     text_chunks = []
     try:
@@ -142,25 +124,172 @@ def extract_text_from_image(path: str) -> str:
         print(f"[image OCR] error: {e}")
         return ""
 
-async def generate_cohere_response(prompt: str, max_tokens: int = 400) -> str:
-    try:
-        response = co.generate(
-            model="command-r-plus",
-            prompt=prompt,
-            max_tokens=max_tokens,
-            temperature=0.7,
-            stop_sequences=["\n\n"]
-        )
-        return response.generations[0].text.strip()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Cohere API error: {str(e)}")
+# --- Models ---
+class TextIn(BaseModel):
+    text: str
+    numQuestions: int
+    mcq: bool
+    shortAnswer: bool
+    longAnswer: bool
 
-# --- Endpoints ---
+class ChapterIn(BaseModel):
+    chapter: str
+    numQuestions: int
+    mcq: bool
+    shortAnswer: bool
+    longAnswer: bool
+
+class QuestionIn(BaseModel):
+    question: str
+
+class AnswerRequest(BaseModel):
+    question: str
+
+# --- Generate Questions from Text ---
+@app.post("/api/nlp-generate-questions")
+async def generate_questions(payload: TextIn):
+    full_text = payload.text.strip()
+    if not full_text:
+        raise HTTPException(status_code=400, detail="No text provided.")
+
+    types = []
+    if payload.mcq: types.append("MCQ")
+    if payload.shortAnswer: types.append("short answer")
+    if payload.longAnswer: types.append("long answer")
+    if not types:
+        raise HTTPException(status_code=400, detail="Select at least one question type.")
+    types_str = ", ".join(types)
+
+    n = payload.numQuestions
+    system_prompt = (
+        f"You are a question paper generator. Based on the following text, "
+        f"generate {n} {types_str} question{'s' if n>1 else ''} relevant to it."
+    )
+
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(
+            system_prompt + "\n\n" + full_text,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.7,
+                max_output_tokens=400
+            )
+        )
+        content = response.text.strip()
+        questions = [
+            line.lstrip("0123456789. ").strip() for line in content.split("\n") if line.strip()
+        ]
+        return {"questions": questions}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Gemini API error: {e}")
+
+# --- Generate Answer ---
+@app.post("/api/generate-answer")
+async def generate_answer(req: AnswerRequest):
+    question = req.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Question is required.")
+
+    system_prompt = (
+        "You are an expert tutor. "
+        "Provide a clear, concise answer to the question below."
+    )
+
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(
+            system_prompt + "\n\n" + question,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.7,
+                max_output_tokens=300
+            )
+        )
+        answer_text = response.text.strip()
+        return {"answer": answer_text}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Gemini API error: {e}")
+
+# --- Upload Question Paper ---
+@app.post("/api/upload-question-paper")
+async def upload_question_paper(file: UploadFile = File(...)):
+    suffix = os.path.splitext(file.filename)[1].lower()
+    if suffix not in [".pdf", ".jpg", ".jpeg"]:
+        raise HTTPException(status_code=400, detail="Unsupported file type")
+
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            contents = await file.read()
+            tmp.write(contents)
+            tmp_path = tmp.name
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"File save error: {e}")
+
+    raw_text = ""
+    try:
+        if suffix == ".pdf":
+            raw_text = extract_text_from_pdf(tmp_path)
+        else:
+            raw_text = extract_text_from_image(tmp_path)
+    finally:
+        os.remove(tmp_path)
+
+    if not raw_text:
+        raise HTTPException(status_code=500, detail="Could not extract any text from file.")
+
+    match = re.search(r'No\.?\s*of\s*Questions\s*[:\-]?\s*(\d+)', raw_text, flags=re.I)
+    total_q = int(match.group(1)) if match else None
+    n_txt = f" The paper states there are {total_q} questions." if total_q else ""
+
+    system_prompt = f"""
+        You are an assistant that receives the full text of an exam paper (including headings, instructions, passages, and questions).
+
+        Your task is to return a JSON object in the following format:
+        {{"questions": ["..."]}}
+
+        Where:
+        - Each item in the "questions" array is a full question or sub-question, in the order it appears.
+        - Include ALL types of questions.
+        - Remove all numbering or lettering ("1.", "(a)", etc.) from each question text.
+        - DO NOT include general instructions or answers.
+
+        {n_txt}
+
+        Return ONLY a valid JSON object. Do not include commentary or markdown.
+    """.strip()
+
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(
+            system_prompt + "\n\n" + raw_text,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.0,
+                max_output_tokens=1500
+            )
+        )
+        resp_content = response.text.strip()
+        obj = json.loads(resp_content)
+        questions = [q.strip() for q in obj.get("questions", []) if isinstance(q, str) and q.strip()]
+    except Exception as e:
+        print(f"[Gemini parse fallback] {e}")
+        fallback_matches = re.findall(
+            r'(\d+\.\s+.*?(?=\n\d+\.|\Z))|(\([a-z]\)\s+.*?(?=\n\([a-z]\)|\n\d+\.|\Z))',
+            raw_text,
+            flags=re.S | re.I
+        )
+        questions = [m[0] or m[1] for m in fallback_matches if m[0] or m[1]]
+
+    if not questions:
+        raise HTTPException(status_code=500, detail="Could not extract questions from paper.")
+
+    return {"questions": questions}
+
+# --- Upload Syllabus ---
 @app.post("/api/upload-syllabus")
 async def upload_syllabus(file: UploadFile = File(...)):
     suffix = os.path.splitext(file.filename)[1].lower()
     if suffix not in [".pdf", ".jpg", ".jpeg"]:
         raise HTTPException(status_code=400, detail="Unsupported file type. Only PDF, JPG or JPEG allowed.")
+
     contents = await file.read()
     if suffix == ".pdf":
         with open(TEMP_PDF, "wb") as f:
@@ -174,87 +303,15 @@ async def upload_syllabus(file: UploadFile = File(...)):
             f.write(contents)
         text = extract_text_from_image(image_path)
         os.remove(image_path)
+
     if not text.strip():
         raise HTTPException(status_code=500, detail="Could not extract any text from file.")
     with open(SYLLABUS_TXT, "w", encoding="utf-8") as f:
         f.write(text)
+
     return {"text": text}
 
-@app.post("/api/nlp-generate-questions")
-async def generate_questions(payload: TextIn):
-    full_text = payload.text.strip()
-    if not full_text:
-        raise HTTPException(status_code=400, detail="No text provided.")
-    types = []
-    if payload.mcq: types.append("MCQ")
-    if payload.shortAnswer: types.append("short answer")
-    if payload.longAnswer: types.append("long answer")
-    if not types:
-        raise HTTPException(status_code=400, detail="Select at least one question type.")
-    types_str = ", ".join(types)
-    n = payload.numQuestions
-    system_prompt = (
-        f"You are a question paper generator. Based on the following text, "
-        f"generate {n} {types_str} question{'s' if n>1 else ''} relevant to it. "
-        f"Return only the questions, one per line, without numbering."
-    )
-    try:
-        response = await generate_cohere_response(f"{system_prompt}\n\nText:\n{full_text}", max_tokens=400)
-        questions = [q.strip() for q in response.split("\n") if q.strip()]
-        return {"questions": questions[:n]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Cohere inference error: {e}")
-
-@app.post("/api/upload-question-paper")
-async def upload_question_paper(file: UploadFile = File(...)):
-    suffix = os.path.splitext(file.filename)[1].lower()
-    if suffix not in [".pdf", ".jpg", ".jpeg"]:
-        raise HTTPException(status_code=400, detail="Unsupported file type")
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            contents = await file.read()
-            tmp.write(contents)
-            tmp_path = tmp.name
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"File save error: {e}")
-    raw_text = ""
-    try:
-        if suffix == ".pdf":
-            raw_text = extract_text_from_pdf(tmp_path)
-        else:
-            raw_text = extract_text_from_image(tmp_path)
-    finally:
-        os.remove(tmp_path)
-    if not raw_text:
-        raise HTTPException(status_code=500, detail="Could not extract any text from file.")
-    match = re.search(r'No\.?\s*of\s*Questions\s*[:\-]?\s*(\d+)', raw_text, flags=re.I)
-    total_q = int(match.group(1)) if match else None
-    n_txt = f" The paper states there are {total_q} questions." if total_q else ""
-    system_prompt = (
-        f"You are an assistant that receives the full text of an exam paper (including headings, instructions, passages, and questions). "
-        f"Your task is to extract all questions and return them as a list of strings, one question per line. "
-        f"- Include ALL types of questions. "
-        f"- Remove all numbering or lettering ('1.', '(a)', etc.) from each question text. "
-        f"- DO NOT include general instructions or answers. "
-        f"{n_txt}\n"
-        f"Return only the questions, one per line."
-    )
-    try:
-        response = await generate_cohere_response(f"{system_prompt}\n\n{raw_text}", max_tokens=1500)
-        questions = [q.strip() for q in response.split("\n") if q.strip()]
-        return {"questions": questions}
-    except Exception as e:
-        print(f"[Cohere parse fallback] {e}")
-        fallback_matches = re.finditer(
-            r'(\d+\.\s+.*?(?=\n\d+\.|\Z))|(\([a-z]\)\s+.*?(?=\n\([a-z]\)|\n\d+\.|\Z))',
-            raw_text,
-            flags=re.S | re.I
-        )
-        questions = [m.group(0) for m in fallback_matches]
-        if not questions:
-            raise HTTPException(status_code=500, detail="Could not extract questions from paper.")
-        return {"questions": questions}
-
+# --- Generate Questions by Chapter ---
 @app.post("/api/nlp-generate-questions-by-chapter")
 async def generate_questions_by_chapter(payload: ChapterIn):
     chapter = payload.chapter.strip()
@@ -266,88 +323,97 @@ async def generate_questions_by_chapter(payload: ChapterIn):
     if not types:
         raise HTTPException(status_code=400, detail="Select at least one question type.")
     types_str = ", ".join(types)
+
     if not chapter:
         raise HTTPException(status_code=400, detail="Chapter name is required.")
     try:
         syllabus_text = open(SYLLABUS_TXT, "r", encoding="utf-8").read()
     except FileNotFoundError:
         raise HTTPException(status_code=400, detail="No syllabus uploaded.")
+
     text_lower = syllabus_text.lower()
     start_idx = text_lower.find(chapter.lower())
     if start_idx == -1:
         raise HTTPException(status_code=404, detail="Chapter not found in syllabus.")
+
     next_units = [
         m.start() for m in re.finditer(r"(?:unit[\s\-]*\d+\b)", text_lower)
         if m.start() > start_idx
     ]
     end_idx = next_units[0] if next_units else len(syllabus_text)
     chapter_content = syllabus_text[start_idx:end_idx].strip()
+
     system_prompt = (
         f"You are an expert question generator. Based on the following syllabus section, "
-        f"generate {n} {types_str} question{'s' if n>1 else ''} relevant to it. "
-        f"Return only the questions, one per line, without numbering."
+        f"generate {n} {types_str} question{'s' if n>1 else ''} relevant to it."
     )
-    try:
-        response = await generate_cohere_response(f"{system_prompt}\n\n{chapter_content}", max_tokens=300)
-        questions = [q.strip() for q in response.split("\n") if q.strip()]
-        return {"chapter": chapter, "questions": questions[:n]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Cohere inference error: {e}")
 
-@app.post("/api/generate-answer")
-async def generate_answer(req: AnswerRequest):
-    question = req.question.strip()
-    if not question:
-        raise HTTPException(status_code=400, detail="Question is required.")
-    system_prompt = (
-        "You are an expert tutor. Provide a clear, concise answer to the following question."
-    )
     try:
-        response = await generate_cohere_response(f"{system_prompt}\n\nQuestion: {question}", max_tokens=300)
-        return {"answer": response}
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(
+            system_prompt + "\n\n" + chapter_content,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.7,
+                max_output_tokens=300
+            )
+        )
+        raw = response.text.strip()
+        questions = [
+            line.lstrip("0123456789. ").strip()
+            for line in raw.split("\n") if line.strip()
+        ]
+        return {"chapter": chapter, "questions": questions}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Cohere inference error: {e}")
+        raise HTTPException(status_code=502, detail=f"Gemini API error: {e}")
 
+# --- Generate Answer to Question ---
 @app.post("/api/nlp-generate-answer-to-question")
 async def generate_answer_to_question(payload: QuestionIn):
     user_question = payload.question.strip()
     if not user_question:
         raise HTTPException(status_code=400, detail="Question is required.")
+
     try:
         syllabus_text = open(SYLLABUS_TXT, "r", encoding="utf-8").read()
     except FileNotFoundError:
         raise HTTPException(status_code=400, detail="No syllabus uploaded.")
+
     system_prompt = (
         "You are an expert academic assistant. Using the provided syllabus content, "
         "answer the user's question clearly, concisely, and accurately. "
-        "If no relevant information is found, say 'Information not found in syllabus.'"
+        "Only answer if relevant information is found. If not found, say 'Information not found in syllabus.'"
     )
-    try:
-        response = await generate_cohere_response(
-            f"{system_prompt}\n\nSyllabus content:\n{syllabus_text}\n\nUser question: {user_question}",
-            max_tokens=400
-        )
-        return {"question": user_question, "answer": response}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Cohere inference error: {e}")
 
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(
+            system_prompt + f"\n\nSyllabus content:\n\n{syllabus_text}\n\nUser question: {user_question}",
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.3,
+                max_output_tokens=400
+            )
+        )
+        answer = response.text.strip()
+        return {"question": user_question, "answer": answer}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Gemini API error: {e}")
+
+# --- Export PDF ---
 @app.post("/api/export-pdf")
 async def export_pdf(request: Request):
     data = await request.json()
     questions = data.get("questions", [])
+
     pdf_path = "generated_questions.pdf"
     doc = SimpleDocTemplate(pdf_path, pagesize=A4,
                             rightMargin=40, leftMargin=40,
                             topMargin=50, bottomMargin=50)
+
     styles = getSampleStyleSheet()
     title_style = styles["Title"]
     question_style = ParagraphStyle(
         "Question", parent=styles["BodyText"],
         leftIndent=10, spaceAfter=6,
-    )
-    option_style = ParagraphStyle(
-        "Option", parent=styles["BodyText"],
-        leftIndent=20, spaceAfter=4,
     )
     answer_label = ParagraphStyle(
         "AnswerLabel", parent=styles["BodyText"],
@@ -359,39 +425,23 @@ async def export_pdf(request: Request):
         leftIndent=20, textColor="#333333",
         spaceAfter=12,
     )
+
     elements = []
     elements.append(Paragraph("Generated Question Paper", title_style))
     elements.append(Spacer(1, 12))
+
     q_items = []
-
     for idx, q in enumerate(questions, start=1):
-        stem = q.get("stem", "") or q.get("question", "")
-        options = q.get("options", [])
+        text = q.get("question", "").replace("\n", "<br/>")
         marks = q.get("marks", "")
-
-        # Prepare the question item elements
-        question_elements = []
-
-        # Add the question stem
-        q_text = f"{stem}"
+        q_text = f".{text}"
         if marks:
-            q_text += f"  <i>({marks} marks)</i>"
-        question_elements.append(Paragraph(q_text, question_style))
+            q_text += f" <i>({marks} marks)</i>"
+        q_items.append(ListItem(Paragraph(q_text, question_style), leftIndent=0))
 
-        # Add options if present (MCQ)
-        if options:
-            option_items = [Paragraph(opt, option_style) for opt in options]
-            nested_list = ListFlowable(option_items, bulletType='bullet', start='circle', leftIndent=20)
-            question_elements.append(nested_list)
-
-        # Add the question as a ListItem
-        q_items.append(ListItem(question_elements, leftIndent=0))
-
-    # Create the numbered list of questions
     elements.append(ListFlowable(q_items, bulletType="1", start="1", leftIndent=0))
     elements.append(Spacer(1, 12))
 
-    # Add answers if present
     for idx, q in enumerate(questions, start=1):
         raw_answer = q.get("answer")
         answer = raw_answer.strip() if isinstance(raw_answer, str) else ""
@@ -403,7 +453,10 @@ async def export_pdf(request: Request):
     doc.build(elements)
     return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_path)
 
-# Serve static assets
+# --- Static Files and React App ---
+tessdata_dir = os.path.join(os.getcwd(), 'tessdata')
+os.environ['TESSDATA_PREFIX'] = tessdata_dir
+
 app.mount("/static", StaticFiles(directory="frontend/dist", html=True), name="static")
 
 @app.get("/{full_path:path}")

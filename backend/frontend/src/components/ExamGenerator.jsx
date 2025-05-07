@@ -37,6 +37,7 @@ export default function ExamGenerator({ user }) {
     { id: Date.now(), question: '', selected: true },
   ]);
 
+  //const API_URL = "http://localhost:8001";
   const API_URL = "https://www.qnagenai.com";
 
   // Reset prompt if user logs in
