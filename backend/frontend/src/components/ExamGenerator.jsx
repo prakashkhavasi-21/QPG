@@ -604,7 +604,6 @@ export default function ExamGenerator({ user }) {
                         <th>#</th>
                         <th>Topic Name</th>
                         <th>#Q</th>
-                        <th>Mark</th>
                         <th />
                       </tr>
                     </thead>
@@ -619,7 +618,7 @@ export default function ExamGenerator({ user }) {
                               onChange={e => updateChapter(c.id, 'selected', e.target.checked)}
                             />
                           </td>
-                          <td style={{ width: '50%' }}>
+                          <td style={{ width: '60%' }}>
                             <input
                               type="text"
                               className="form-control"
@@ -628,7 +627,7 @@ export default function ExamGenerator({ user }) {
                               onChange={e => updateChapter(c.id, 'chapter', e.target.value)}
                             />
                           </td>
-                          <td style={{ width: '20%' }}>
+                          <td style={{ width: '25%' }}>
                             <input
                               type="number"
                               className="form-control"
@@ -636,7 +635,7 @@ export default function ExamGenerator({ user }) {
                               onChange={e => updateChapter(c.id, 'numQuestions', e.target.value)}
                             />
                           </td>
-                          <td style={{ width: '20%' }}>
+                          <td style={{ width: '20%', display: 'none' }}>
                             <input
                               type="number"
                               className="form-control"
