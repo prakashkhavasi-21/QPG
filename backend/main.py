@@ -228,12 +228,14 @@ async def upload_question_paper(file: UploadFile = File(...)):
     try:
         if suffix == ".pdf":
             raw_text = extract_text_from_pdf(tmp_path)
+            if not raw_text.strip():
+                raw_text = extract_text_from_image(tmp_path)
         else:
             raw_text = extract_text_from_image(tmp_path)
     finally:
         os.remove(tmp_path)
 
-    if not raw_text:
+    if not raw_text.strip():
         raise HTTPException(status_code=500, detail="Could not extract any text from file.")
 
     match = re.search(r'No\.?\s*of\s*Questions\s*[:\-]?\s*(\d+)', raw_text, flags=re.I)
@@ -250,6 +252,9 @@ async def upload_question_paper(file: UploadFile = File(...)):
         - Each item in the "questions" array is a full question or sub-question, in the order it appears.
         - Include ALL types of questions.
         - Remove all numbering or lettering ("1.", "(a)", etc.) from each question text.
+        - Remove all answer choices/options from multiple-choice or similar questions. Include ONLY the main question text.
+        - Do NOT include any other text, such as headings, instructions, or answer choices.
+        - Do NOT include any additional commentary or explanations.
         - DO NOT include general instructions or answers.
 
         {n_txt}
@@ -282,6 +287,8 @@ async def upload_question_paper(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail="Could not extract questions from paper.")
 
     return {"questions": questions}
+
+
 
 # --- Upload Syllabus ---
 @app.post("/api/upload-syllabus")
