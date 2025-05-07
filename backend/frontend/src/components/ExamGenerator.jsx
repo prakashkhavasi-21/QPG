@@ -459,7 +459,7 @@ export default function ExamGenerator({ user }) {
                   className="form-select w-50"
                   value={Object.keys(questionTypes).find(key => questionTypes[key]) || 'shortAnswer'}
                   onChange={e => handleQuestionTypeChange(e.target.value)}
-                  style={{ maxWidth: '350px' }}
+                  style={{ width: '100%', maxWidth: '350px'}}
                 >
                   <option value="mcq">Multiple Choice (MCQ)</option>
                   <option value="shortAnswer">Short Answer</option>

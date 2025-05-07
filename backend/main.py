@@ -167,15 +167,13 @@ async def generate_questions(payload: TextIn):
     # )
 
     system_prompt = f"""
-        You are an expert question paper generator. Do NOT ask for clarification—just generate the questions.
-        Based solely on the following text, generate {n} {types_str} question{'s' if n>1 else ''}:
+        You are an expert question paper generator. Based on the following text,
+        generate {n} {types_str} question{'s' if n>1 else ''}:
 
         {full_text}
 
         If MCQs are requested:
         - Mark the correct choice with “*” before the letter.
-
-        Return ONLY the questions (and choices), one per line—no commentary, no preamble.
     """.strip()
 
     try:
