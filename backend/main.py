@@ -309,8 +309,8 @@ async def upload_question_paper(file: UploadFile = File(...)):
 
         # … your temp‐file, OCR logic, `raw_text` generation stays the same …
 
-    # 1) Call Gemini
-    resp_content = ""
+    questions = []  # ← initialize here
+
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content([
@@ -320,11 +320,13 @@ async def upload_question_paper(file: UploadFile = File(...)):
         resp_content = response.text.strip()
         print(f"[Gemini returned] >>>{resp_content}<<<")
 
-        # 2) Try JSON parse only if it looks like JSON
         if resp_content.startswith("{"):
             try:
                 obj = json.loads(resp_content)
-                questions = [q.strip() for q in obj.get("questions", []) if isinstance(q, str) and q.strip()]
+                questions = [
+                    q.strip() for q in obj.get("questions", [])
+                    if isinstance(q, str) and q.strip()
+                ]
             except json.JSONDecodeError as je:
                 print(f"[JSONDecodeError] {je}")
         else:
@@ -333,7 +335,7 @@ async def upload_question_paper(file: UploadFile = File(...)):
     except Exception as e:
         print(f"[Gemini API error] {e}")
 
-    # 3) Fallback regex if JSON didn’t produce any questions
+    # Fallback regex if still no questions
     if not questions:
         fallback_matches = re.findall(
             r'(\d+\.\s+.*?(?=\n\d+\.|\Z))|(\([a-z]\)\s+.*?(?=\n\([a-z]\)|\n\d+\.|\Z))',
