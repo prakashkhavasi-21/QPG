@@ -167,10 +167,9 @@ async def generate_questions(payload: TextIn):
     # )
 
     system_prompt = f"""
-        You are an expert question paper generator. 
-        When the input text is too vague, ask a single clarifying question.
-        calrify question should start with "A)"
-        Otherwise, generate {n} {types_str} question{'s' if n>1 else ''}:
+        You are an expert question paper generator. Based on the following text,
+        any additional commentary or preamble should starts with "A)"
+        generate {n} {types_str} question{'s' if n>1 else ''}:
 
         {full_text}
 
