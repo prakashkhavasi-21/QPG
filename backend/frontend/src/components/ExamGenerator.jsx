@@ -469,16 +469,18 @@ export default function ExamGenerator({ user }) {
                 </select>
               </div>
               </div>
-              <div className="mt-3">
-                <label className="form-label fw-bold text-accent">Number of Questions</label>
-                <input
-                  type="number"
-                  className="form-control w-50 mx-auto"
-                  value={numQuestions}
-                  onChange={e => setNumQuestions(+e.target.value)}
-                  style={{ maxWidth: '300px' }}
-                />
-              </div>
+              {mode !== 'multi' && (
+                <div className="mt-3">
+                  <label className="form-label fw-bold text-accent">Number of Questions</label>
+                  <input
+                    type="number"
+                    className="form-control w-50 mx-auto"
+                    value={numQuestions}
+                    onChange={e => setNumQuestions(+e.target.value)}
+                    style={{ maxWidth: '300px' }}
+                  />
+                </div>
+              )}
             </div>
           )}
 

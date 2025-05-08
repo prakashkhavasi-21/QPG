@@ -438,10 +438,26 @@ async def generate_questions_by_chapter(payload: ChapterIn):
     end_idx = next_units[0] if next_units else len(syllabus_text)
     chapter_content = syllabus_text[start_idx:end_idx].strip()
 
-    system_prompt = (
-        f"You are an expert question generator. Based on the following syllabus section, "
-        f"generate {n} {types_str} question{'s' if n>1 else ''} relevant to it."
-    )
+    # system_prompt = (
+    #     f"You are an expert question generator. Based on the following syllabus section, "
+    #     f"generate {n} {types_str} question{'s' if n>1 else ''} relevant to it."
+    # )
+
+    system_prompt = f"""
+        You are an expert question paper generator. Based on the following text,
+        If you need to add any commentary or preamble before the list of questions, that commentary **alone** may start with “A)”.
+        generate {n} {types_str} question{'s' if n>1 else ''}:
+
+
+        Formatting rule for code snippets:
+        - Whenever you wrap any part of a question in triple-backticks (```), keep the entire fence and its contents on the **same line** as the question.
+        - Do NOT break the triple-backticks onto their own lines.
+
+        If MCQs are requested:
+        - Mark the correct choice with “✔” after the letter.
+        - If a question contains the exact phrase “which of the following”, do not include it or mention it in any way—omit it silently.
+        - If a question contains the exact phrase “which of the following is NOT”, do not include it or mention it in any way—omit it silently.
+    """.strip()
 
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
