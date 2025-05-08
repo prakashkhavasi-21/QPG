@@ -193,17 +193,9 @@ async def generate_questions(payload: TextIn):
             )
         )
         content = response.text.strip()
-        # questions = [
-        #     line.lstrip("0123456789. ").strip() for line in content.split("\n") if line.strip()
-        # ]
-        questions = []
-        for line in content.split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-            # Remove patterns like "Q1.", "Q1)", "1.", "1)", "Q1 -"
-            cleaned_line = re.sub(r"^(Q?\d+[\.\)\-]?\s*)", "", line, flags=re.IGNORECASE)
-            questions.append(cleaned_line)
+        questions = [
+            line.lstrip("0123456789. ").strip() for line in content.split("\n") if line.strip()
+        ]
         return {"questions": questions}
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Gemini API error: {e}")
@@ -547,74 +539,67 @@ async def generate_answer_to_question(payload: QuestionIn):
 #     return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_path)
 
 
-@app.post("/api/export-pdf")
-async def export_pdf(request: Request):
-    data = await request.json()
-    questions = data.get("questions", [])
+@app.post("/api/nlp-generate-questions")
+async def generate_questions(payload: TextIn):
+    import re
 
-    pdf_path = "generated_questions.pdf"
-    doc = SimpleDocTemplate(pdf_path, pagesize=A4,
-                             rightMargin=40, leftMargin=40,
-                             topMargin=50, bottomMargin=50)
+    full_text = payload.text.strip()
+    if not full_text:
+        raise HTTPException(status_code=400, detail="No text provided.")
 
-    styles = getSampleStyleSheet()
-    title_style = styles["Title"]
+    types = []
+    if payload.mcq:
+        types.append("MCQ")
+    if payload.shortAnswer:
+        types.append("short answer")
+    if payload.longAnswer:
+        types.append("long answer")
+    if not types:
+        raise HTTPException(status_code=400, detail="Select at least one question type.")
+    types_str = ", ".join(types)
 
-    # Styles
-    question_style_normal = ParagraphStyle(
-        "QuestionNormal",
-        parent=styles["BodyText"],
-        leftIndent=0,
-        spaceAfter=6,
-        fontName="Helvetica"
-    )
+    n = payload.numQuestions
 
-    question_style_bold = ParagraphStyle(
-        "QuestionBold",
-        parent=styles["BodyText"],
-        leftIndent=0,
-        spaceAfter=6,
-        fontName="Helvetica-Bold"
-    )
+    system_prompt = f"""
+        You are an expert question paper generator. Based on the following text,
+        If you need to add any commentary or preamble before the list of questions, that commentary **alone** may start with “A)”.
+        generate {n} {types_str} question{'s' if n>1 else ''}:
 
-    answer_style = ParagraphStyle(
-        "Answer",
-        parent=styles["BodyText"],
-        leftIndent=15,
-        spaceAfter=4,
-        fontName="Helvetica"
-    )
+        {full_text}
 
-    elements = []
-    elements.append(Paragraph("Generated Question Paper", title_style))
-    elements.append(Spacer(1, 12))
+        Formatting rule for code snippets:
+        - Whenever you wrap any part of a question in triple-backticks (```), keep the entire fence and its contents on the **same line** as the question.
+        - Do NOT break the triple-backticks onto their own lines.
 
-    # Go through each question
-    for q in questions:
-        text = q.get("question", "").replace("\n", "<br/>")
-        marks = q.get("marks", "")
+        If MCQs are requested:
+        - Mark the correct choice with “✔” after the letter.
+        - If a question contains the exact phrase “which of the following”, do not include it or mention it in any way—omit it silently.
+        - If a question contains the exact phrase “which of the following is NOT”, do not include it or mention it in any way—omit it silently.
+    """.strip()
 
-        # Check if ends with ?
-        style = question_style_bold if text.strip().endswith('?') else question_style_normal
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(
+            system_prompt + "\n\n" + full_text,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.7,
+                max_output_tokens=400
+            )
+        )
+        content = response.text.strip()
 
-        q_text = f" {text}"
-        if marks:
-            q_text += f" <i>({marks} marks)</i>"
+        questions = []
+        for line in content.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            # Robust removal of Q1, Q 1., 1., 1) etc.
+            cleaned_line = re.sub(r"^(Q?\s*\d+\s*[\.\)\-:]?\s*)", "", line, flags=re.IGNORECASE)
+            questions.append(cleaned_line)
 
-        # Add the question (NO numbering)
-        elements.append(Paragraph(q_text, style))
-
-        # If answer/choices present, show directly below (NO numbering)
-        raw_answer = q.get("answer")
-        answer = raw_answer.strip() if isinstance(raw_answer, str) else ""
-        if answer:
-            for line in answer.split("\n"):
-                elements.append(Paragraph(line.strip(), answer_style))
-
-        elements.append(Spacer(1, 6))  # small gap between Qs
-
-    doc.build(elements)
-    return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_path)
+        return {"questions": questions}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Gemini API error: {e}")
 
 
 # --- Static Files and React App ---
