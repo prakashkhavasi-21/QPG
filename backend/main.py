@@ -552,11 +552,11 @@ async def export_pdf(request: Request):
     styles = getSampleStyleSheet()
     title_style = styles["Title"]
 
-    # Two styles: normal and bold
+    # Styles
     question_style_normal = ParagraphStyle(
         "QuestionNormal",
         parent=styles["BodyText"],
-        leftIndent=10,
+        leftIndent=0,
         spaceAfter=6,
         fontName="Helvetica"
     )
@@ -564,51 +564,46 @@ async def export_pdf(request: Request):
     question_style_bold = ParagraphStyle(
         "QuestionBold",
         parent=styles["BodyText"],
-        leftIndent=10,
+        leftIndent=0,
         spaceAfter=6,
         fontName="Helvetica-Bold"
     )
 
-    answer_label = ParagraphStyle(
-        "AnswerLabel", parent=styles["BodyText"],
-        leftIndent=20, fontName="Helvetica-BoldOblique",
-        spaceAfter=4,
-    )
-
     answer_style = ParagraphStyle(
-        "Answer", parent=styles["BodyText"],
-        leftIndent=30, textColor="#333333",
-        spaceAfter=12,
+        "Answer",
+        parent=styles["BodyText"],
+        leftIndent=15,
+        spaceAfter=4,
+        fontName="Helvetica"
     )
 
     elements = []
     elements.append(Paragraph("Generated Question Paper", title_style))
     elements.append(Spacer(1, 12))
 
-    q_items = []
-    for idx, q in enumerate(questions, start=1):
+    # Go through each question
+    for q in questions:
         text = q.get("question", "").replace("\n", "<br/>")
         marks = q.get("marks", "")
 
         # Check if ends with ?
         style = question_style_bold if text.strip().endswith('?') else question_style_normal
 
-        q_text = f"  {text}"
+        q_text = f" {text}"
         if marks:
             q_text += f" <i>({marks} marks)</i>"
 
-        q_items.append(ListItem(Paragraph(q_text, style), leftIndent=0))
+        # Add the question (NO numbering)
+        elements.append(Paragraph(q_text, style))
 
-    elements.append(ListFlowable(q_items, bulletType="1", start="1", leftIndent=0))
-    elements.append(Spacer(1, 12))
-
-    for idx, q in enumerate(questions, start=1):
+        # If answer/choices present, show directly below (NO numbering)
         raw_answer = q.get("answer")
         answer = raw_answer.strip() if isinstance(raw_answer, str) else ""
         if answer:
-            elements.append(Paragraph(f"{idx}. Answer:", answer_label))
             for line in answer.split("\n"):
-                elements.append(Paragraph(line, answer_style))
+                elements.append(Paragraph(line.strip(), answer_style))
+
+        elements.append(Spacer(1, 6))  # small gap between Qs
 
     doc.build(elements)
     return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_path)
