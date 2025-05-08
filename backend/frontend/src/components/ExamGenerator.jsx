@@ -37,6 +37,7 @@ export default function ExamGenerator({ user }) {
     { id: Date.now(), question: '', selected: true },
   ]);
 
+  let nonMcqCounter = 1;
   //const API_URL = "http://localhost:8001";
   const API_URL = "https://www.qnagenai.com";
 
@@ -711,14 +712,15 @@ export default function ExamGenerator({ user }) {
               </button>
             )}
           </div>
-
+         
           {questions.length > 0 && syllabusmode !== 'question' && (
             <div className="mt-5">
-              <h5 className="text-accent">Generated Questions:</h5>
-               
+              <h5 className="text-accent">Generated Questions:</h5>              
               {questions.map((q, idx) => {
                 const lines = q.question.split('\n');
                 const isMCQ = lines.some(line => /^[-\s]*[A-Za-z0-9][).]\s+/.test(line.trim()));
+
+                const currentQuestionNumber = isMCQ ? null : nonMcqCounter++;
                 return (
                   <div key={idx} className="card question-card mb-3">
                     <div className="card-body">
@@ -726,7 +728,7 @@ export default function ExamGenerator({ user }) {
                       {isMCQ ? (
                         <h6>{lines[0]}</h6>                         
                       ) : (
-                        <h6>Q{idx+1}. {lines[0]}</h6>
+                        <h6>Q{currentQuestionNumber}. {lines[0]}</h6>
                       )}
 
                       {isMCQ && (
