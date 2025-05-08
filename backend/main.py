@@ -193,9 +193,17 @@ async def generate_questions(payload: TextIn):
             )
         )
         content = response.text.strip()
-        questions = [
-            line.lstrip("0123456789. ").strip() for line in content.split("\n") if line.strip()
-        ]
+        # questions = [
+        #     line.lstrip("0123456789. ").strip() for line in content.split("\n") if line.strip()
+        # ]
+        questions = []
+        for line in content.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            # Remove patterns like "Q1.", "Q1)", "1.", "1)", "Q1 -"
+            cleaned_line = re.sub(r"^(Q?\d+[\.\)\-]?\s*)", "", line, flags=re.IGNORECASE)
+            questions.append(cleaned_line)
         return {"questions": questions}
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Gemini API error: {e}")
