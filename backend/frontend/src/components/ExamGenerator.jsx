@@ -726,7 +726,7 @@ export default function ExamGenerator({ user }) {
                       {isMCQ ? (
                         <h6>{lines[0]}</h6>                         
                       ) : (
-                        <h6>Q{idx+1}. {lines[0]}</h6>
+                        <h6>{lines[0]}</h6>
                       )}
 
                       {isMCQ && (
@@ -784,6 +784,7 @@ export default function ExamGenerator({ user }) {
                       <button
                         className="btn btn-sm position-absolute close-answer-btn"
                         onClick={() => collapseAnswer(idx)}
+                        style={{ bottom: '2px', right: '2px', backgroundColor: 'orange', color: 'white', border: 'none' }}
                       >
                         X
                       </button>

@@ -484,15 +484,76 @@ async def generate_answer_to_question(payload: QuestionIn):
         raise HTTPException(status_code=502, detail=f"Gemini API error: {e}")
 
 # --- Export PDF ---
+# @app.post("/api/export-pdf")
+# async def export_pdf(request: Request):
+#     data = await request.json()
+#     questions = data.get("questions", [])
+
+#     pdf_path = "generated_questions.pdf"
+#     doc = SimpleDocTemplate(pdf_path, pagesize=A4,
+#                             rightMargin=40, leftMargin=40,
+#                             topMargin=50, bottomMargin=50)
+
+#     styles = getSampleStyleSheet()
+#     title_style = styles["Title"]
+#     question_style = ParagraphStyle(
+#         "Question", parent=styles["BodyText"],
+#         leftIndent=10, spaceAfter=6,
+#     )
+#     answer_label = ParagraphStyle(
+#         "AnswerLabel", parent=styles["BodyText"],
+#         leftIndent=10, fontName="Helvetica-BoldOblique",
+#         spaceAfter=4,
+#     )
+#     answer_style = ParagraphStyle(
+#         "Answer", parent=styles["BodyText"],
+#         leftIndent=20, textColor="#333333",
+#         spaceAfter=12,
+#     )
+
+#     elements = []
+#     elements.append(Paragraph("Generated Question Paper", title_style))
+#     elements.append(Spacer(1, 12))
+
+#     q_items = []
+#     for idx, q in enumerate(questions, start=1):
+#         text = q.get("question", "").replace("\n", "<br/>")
+#         marks = q.get("marks", "")
+#         q_text = f"   {text}"
+#         if marks:
+#             q_text += f" <i>({marks} marks)</i>"
+#         q_items.append(ListItem(Paragraph(q_text, question_style), leftIndent=0))
+
+#     elements.append(ListFlowable(q_items, bulletType="1", start="1", leftIndent=0))
+#     elements.append(Spacer(1, 12))
+
+#     for idx, q in enumerate(questions, start=1):
+#         raw_answer = q.get("answer")
+#         answer = raw_answer.strip() if isinstance(raw_answer, str) else ""
+#         if answer:
+#             elements.append(Paragraph(f"{idx}. Answer:", answer_label))
+#             for line in answer.split("\n"):
+#                 elements.append(Paragraph(line, answer_style))
+
+#     doc.build(elements)
+#     return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_path)
+
+
 @app.post("/api/export-pdf")
 async def export_pdf(request: Request):
+    from fastapi.responses import FileResponse
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+    from reportlab.platypus import ListFlowable, ListItem
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.pagesizes import A4
+
     data = await request.json()
     questions = data.get("questions", [])
 
     pdf_path = "generated_questions.pdf"
     doc = SimpleDocTemplate(pdf_path, pagesize=A4,
-                            rightMargin=40, leftMargin=40,
-                            topMargin=50, bottomMargin=50)
+                             rightMargin=40, leftMargin=40,
+                             topMargin=50, bottomMargin=50)
 
     styles = getSampleStyleSheet()
     title_style = styles["Title"]
@@ -502,12 +563,12 @@ async def export_pdf(request: Request):
     )
     answer_label = ParagraphStyle(
         "AnswerLabel", parent=styles["BodyText"],
-        leftIndent=10, fontName="Helvetica-BoldOblique",
+        leftIndent=20, fontName="Helvetica-BoldOblique",
         spaceAfter=4,
     )
     answer_style = ParagraphStyle(
         "Answer", parent=styles["BodyText"],
-        leftIndent=20, textColor="#333333",
+        leftIndent=30, textColor="#333333",
         spaceAfter=12,
     )
 
@@ -515,28 +576,30 @@ async def export_pdf(request: Request):
     elements.append(Paragraph("Generated Question Paper", title_style))
     elements.append(Spacer(1, 12))
 
-    q_items = []
     for idx, q in enumerate(questions, start=1):
         text = q.get("question", "").replace("\n", "<br/>")
         marks = q.get("marks", "")
-        q_text = f".{text}"
+        q_text = f"  {text}"
         if marks:
             q_text += f" <i>({marks} marks)</i>"
-        q_items.append(ListItem(Paragraph(q_text, question_style), leftIndent=0))
 
-    elements.append(ListFlowable(q_items, bulletType="1", start="1", leftIndent=0))
-    elements.append(Spacer(1, 12))
+        # Add question
+        elements.append(Paragraph(q_text, question_style))
 
-    for idx, q in enumerate(questions, start=1):
+        # Add answer (immediately after)
         raw_answer = q.get("answer")
         answer = raw_answer.strip() if isinstance(raw_answer, str) else ""
         if answer:
-            elements.append(Paragraph(f"{idx}. Answer:", answer_label))
+            elements.append(Paragraph("Answer:", answer_label))
             for line in answer.split("\n"):
                 elements.append(Paragraph(line, answer_style))
 
+        # Optional space between Q-A blocks
+        elements.append(Spacer(1, 12))
+
     doc.build(elements)
     return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_path)
+
 
 # --- Static Files and React App ---
 tessdata_dir = os.path.join(os.getcwd(), 'tessdata')
