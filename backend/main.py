@@ -173,8 +173,12 @@ async def generate_questions(payload: TextIn):
 
         {full_text}
 
+        Formatting rule for code snippets:
+        - Whenever you wrap any part of a question in triple-backticks (```), keep the entire fence and its contents on the **same line** as the question.
+        - Do NOT break the triple-backticks onto their own lines.
+
         If MCQs are requested:
-        - Mark the correct choice with “*” before the letter.
+        - Mark the correct choice with “*” after the letter.
     """.strip()
 
     try:
