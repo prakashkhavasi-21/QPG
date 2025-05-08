@@ -167,20 +167,15 @@ async def generate_questions(payload: TextIn):
     # )
 
     system_prompt = f"""
-        You are an expert question paper generator.
-
-        1. If the provided text is too vague to write specific questions, output exactly one clarifying question as an MCQ—formatted entirely on one line—as follows:
-
-        Clarify: <your question>? (a) <optA>  (b) <optB>  (c) <optC>  (d) <optD>
-
-        2. Otherwise, generate {n} {types_str} question{'s' if n>1 else ''} based on the text below.
-        - For each MCQ: provide four answer choices labeled (a), (b), (c), (d) on separate lines beneath the question, and mark the correct choice with “*” before the letter.
-        - For non-MCQ types, just list the question.
-
-        Return ONLY the clarifying MCQ (if needed) or the generated questions (with their choices), one item per line—no additional commentary or preamble.
-
+        You are an expert question paper generator. 
+        When the input text is too vague, ask a single clarifying question.
+        calrify question should start with "A)"
+        Otherwise, generate {n} {types_str} question{'s' if n>1 else ''}:
 
         {full_text}
+
+        If MCQs are requested:
+        - Mark the correct choice with “*” before the letter.
     """.strip()
 
     try:
