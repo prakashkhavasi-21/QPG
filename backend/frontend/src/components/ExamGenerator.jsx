@@ -726,7 +726,7 @@ export default function ExamGenerator({ user }) {
                       {isMCQ ? (
                         <h6>{lines[0]}</h6>                         
                       ) : (
-                        <h6>{lines[0]}</h6>
+                        <h6>Q{idx+1}. {lines[0]}</h6>
                       )}
 
                       {isMCQ && (
