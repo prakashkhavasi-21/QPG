@@ -179,8 +179,8 @@ async def generate_questions(payload: TextIn):
 
         If MCQs are requested:
         - Mark the correct choice with “✔” after the letter.
-        - If a question contains “which of the following,” print the question, then list each answer choice on its own line immediately below it (no blank lines).
-        - If a question contains “which of the following is NOT,” print the question, then list each answer choice on its own line immediately below it (no blank lines).
+        - If a question contains the phrase “which of the following”, skip it entirely and do not return it.
+        - If a question contains the phrase “which of the following is NOT”, skip it entirely and do not return it.
     """.strip()
 
     try:
