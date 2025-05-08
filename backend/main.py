@@ -168,7 +168,7 @@ async def generate_questions(payload: TextIn):
 
     system_prompt = f"""
         You are an expert question paper generator. Based on the following text,
-        any additional commentary or preamble should starts with "A)"
+        If you need to add any commentary or preamble before the list of questions, that commentary **alone** may start with “A)”.
         generate {n} {types_str} question{'s' if n>1 else ''}:
 
         {full_text}
