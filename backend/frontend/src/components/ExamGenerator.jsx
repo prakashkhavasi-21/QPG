@@ -455,8 +455,9 @@ export default function ExamGenerator({ user }) {
             <div className="mb-5 text-center">
               <h5 className="mb-3 text-accent">Select Question Type</h5>
               <div className="d-flex justify-content-center">
+              <div className="col-12 col-md-6 col-lg-4">
                 <select
-                  className="form-select w-50"
+                  className="form-select w-100"
                   value={Object.keys(questionTypes).find(key => questionTypes[key]) || 'shortAnswer'}
                   onChange={e => handleQuestionTypeChange(e.target.value)}
                   style={{ width: '100%', maxWidth: '350px'}}
@@ -465,6 +466,7 @@ export default function ExamGenerator({ user }) {
                   <option value="shortAnswer">Short Answer</option>
                   <option value="longAnswer">Long Answer</option>
                 </select>
+              </div>
               </div>
               <div className="mt-3">
                 <label className="form-label fw-bold text-accent">Number of Questions</label>
