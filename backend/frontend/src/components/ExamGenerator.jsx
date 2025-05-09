@@ -55,6 +55,9 @@ export default function ExamGenerator({ user }) {
   // Reset syllabusmode if we leave multi
   useEffect(() => {
     if (mode !== 'multi') setSyllabusMode('chapter');
+    setQuestions([]);
+    setAnswers([]);
+    nonMcqCounter = 1;
   }, [mode]);
 
   // Compute whether to show the main "Generate Questions" button
@@ -79,6 +82,7 @@ export default function ExamGenerator({ user }) {
     };
     if (user) loadCredits();
   }, [user, navigate]);
+
 
   // --- Helpers for manual topics ---
   const addTopic = () =>
@@ -675,7 +679,7 @@ export default function ExamGenerator({ user }) {
                 </button>
               </div>
               <div className="d-flex mb-4">
-                <button className="btn btn-sm btn-success" onClick={downloadMockTestPaper}>
+                <button className="btn btn-sm btn-success" onClick={downloadMockTestPaper} disabled={loading}>
                   {loading ? 'Downloading...' : 'Download Mock Test Paper'}
                 </button>
               </div>
