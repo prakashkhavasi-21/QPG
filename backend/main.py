@@ -1,6 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, StreamingResponse
 from pdfminer.high_level import extract_text
 from pydantic import BaseModel
 import fitz  # PyMuPDF for native text extraction
@@ -24,6 +24,9 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.enums import TA_LEFT
+from itertools import groupby
+from operator import itemgetter
+
 
 app = FastAPI()
 
@@ -633,6 +636,194 @@ async def export_pdf(request: Request):
     doc.build(elements)
     return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_path)
 
+
+# Pydantic model for mock test request
+class MockTestItem(BaseModel):
+    numQuestions: int
+    marks: int
+
+class MockTestRequest(BaseModel):
+    mocktestRequests: list[MockTestItem]
+
+# Function to generate questions using Gemini API
+import traceback
+def generate_mock_questions(requests: list[MockTestItem]) -> list[dict]:
+    try:
+        # Validate requests
+        for req in requests:
+            if req.numQuestions <= 0 or req.marks <= 0:
+                raise HTTPException(status_code=400, detail="numQuestions and marks must be positive.")
+
+        # Read syllabus
+        try:
+            with open(SYLLABUS_TXT, "r", encoding="utf-8") as f:
+                syllabus_text = f.read()
+                print(f"Syllabus content: {syllabus_text[:100]}...")
+        except FileNotFoundError:
+            raise HTTPException(status_code=400, detail="No syllabus uploaded.")
+
+        if not syllabus_text.strip():
+            raise HTTPException(status_code=400, detail="Syllabus is empty.")
+
+        # Build prompt for all questions
+        prompt_parts = []
+        total_questions = 0
+        for req in requests:
+            question_type = "short answer" if req.marks <= 2 else "long answer"
+            prompt_parts.append(
+                f"- {req.numQuestions} {question_type} question{'s' if req.numQuestions > 1 else ''} for {req.marks} marks"
+            )
+            total_questions += req.numQuestions
+
+        system_prompt = f"""
+            You are an expert question paper generator. Based on the following syllabus text,
+            generate the following unique questions:
+
+            {', '.join(prompt_parts)}
+
+            Requirements:
+            - Ensure all questions are distinct and do not repeat across sections.
+            - For 1-2 marks, generate concise short-answer questions (1-2 sentences).
+            - For 5+ marks, generate detailed long-answer questions requiring explanation or comparison.
+            - Format each question with its marks in parentheses, e.g., "Question text (X marks)".
+            - Do not include commentary or preamble unless it starts with “A)”.
+
+            Formatting rule for code snippets:
+            - Whenever you wrap any part of a question in triple-backticks (```), keep the entire fence and its contents on the **same line** as the question.
+            - Do NOT break the triple-backticks onto their own lines.
+
+            Syllabus:
+            {syllabus_text}
+        """.strip()
+
+        # Call Gemini
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(
+            system_prompt + "\n\nGenerate the questions based on the syllabus.",
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.7,
+                max_output_tokens=1000  # Increased to handle multiple questions
+            )
+        )
+        content = response.text.strip()
+        #print(f"Gemini raw response: {content}")
+
+        # Parse questions
+        questions = []
+        for line in content.split("\n"):
+            line = line.strip()
+            if not line or line.lower().startswith("a)"):
+                continue
+            # Extract question and marks
+            match = re.match(r"^(.*?)\s*\((\d+)\s*marks?\)$", line, re.IGNORECASE)
+            if match:
+                question_text = match.group(1).strip()
+                marks = int(match.group(2))
+                # Remove numbering or lettering
+                cleaned_question = re.sub(r"^(Q?\s*\d+\s*[\.\)\-:]?\s*)|^\([a-z]\)\s*", "", question_text, flags=re.IGNORECASE)
+                if cleaned_question:
+                    questions.append({"question": cleaned_question, "marks": marks})
+
+        # Validate question counts
+        question_counts = {}
+        for req in requests:
+            question_counts[req.marks] = req.numQuestions
+
+        filtered_questions = []
+        counts = {marks: 0 for marks in question_counts}
+        for q in questions:
+            marks = q["marks"]
+            if marks in counts and counts[marks] < question_counts.get(marks, 0):
+                filtered_questions.append(q)
+                counts[marks] += 1
+
+        #print(f"Parsed questions: {filtered_questions}")
+        if len(filtered_questions) < total_questions:
+            raise HTTPException(status_code=500, detail="Generated fewer questions than requested.")
+
+        return filtered_questions
+    except Exception as e:
+        print(f"Error in generate_mock_questions: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=502, detail=f"Gemini API error: {str(e)}")
+
+@app.post("/api/export-mocktestpaper")
+async def export_mocktestpaper(request: MockTestRequest):
+    try:
+        # Generate all questions in one call
+        all_questions = generate_mock_questions(request.mocktestRequests)
+
+        if not all_questions:
+            raise HTTPException(status_code=400, detail="No questions generated.")
+
+        # Group questions by marks
+        sorted_questions = sorted(all_questions, key=itemgetter('marks'))
+        grouped_questions = {k: list(g) for k, g in groupby(sorted_questions, key=itemgetter('marks'))}
+        #print(f"Grouped questions: {grouped_questions}")
+
+        # Create a buffer for the PDF
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
+        styles = getSampleStyleSheet()
+
+        # Define custom styles
+        title_style = ParagraphStyle(
+            'Title',
+            parent=styles['Heading1'],
+            fontSize=16,
+            spaceAfter=20,
+            alignment=TA_LEFT
+        )
+        section_style = ParagraphStyle(
+            'Section',
+            parent=styles['Heading2'],
+            fontSize=14,
+            spaceAfter=12,
+            spaceBefore=12,
+            alignment=TA_LEFT
+        )
+        question_style = ParagraphStyle(
+            'Question',
+            parent=styles['Normal'],
+            fontSize=12,
+            spaceAfter=12,
+            leading=14,
+            alignment=TA_LEFT
+        )
+
+        # Build the PDF content
+        elements = []
+        elements.append(Paragraph("Mock Test Paper", title_style))
+        elements.append(Spacer(1, 12))
+
+        # Add sections for each marks value
+        for section_idx, marks in enumerate(sorted(grouped_questions.keys())):
+            questions = grouped_questions[marks]
+            section_letter = chr(65 + section_idx)  # A, B, C, ...
+            section_header = f"Section {section_letter}: {marks} Marks"
+            elements.append(Paragraph(section_header, section_style))
+            elements.append(Spacer(1, 6))
+
+            # Add questions in this section
+            for q_idx, q in enumerate(questions, 1):
+                question_text = f"{q_idx}. {q['question']}"
+                elements.append(Paragraph(question_text, question_style))
+                elements.append(Spacer(1, 12))
+
+        # Generate the PDF
+        doc.build(elements)
+        buffer.seek(0)
+
+        # Return the PDF as a streaming response
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=mocktestpaper.pdf"}
+        )
+    except Exception as e:
+        print(f"Error in export_mocktestpaper: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"PDF export failed: {str(e)}")
 
 
 # --- Static Files and React App ---

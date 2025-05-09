@@ -36,10 +36,14 @@ export default function ExamGenerator({ user }) {
   const [questionRequests, setQuestionRequests] = useState([
     { id: Date.now(), question: '', selected: true },
   ]);
+  
+  const [mocktestRequests, setMocktestRequests] = useState([
+    { id: Date.now(), marks: 5, numQuestions: 5, selected: true },
+  ]);
 
   let nonMcqCounter = 1;
-  //const API_URL = "http://localhost:8001";
-  const API_URL = "https://www.qnagenai.com";
+  const API_URL = "http://localhost:8001";
+  //const API_URL = "https://www.qnagenai.com";
 
   // Reset prompt if user logs in
   useEffect(() => {
@@ -99,6 +103,22 @@ export default function ExamGenerator({ user }) {
 
   const removeQuestion = id =>
     setQuestionRequests(prev => prev.filter(c => c.id !== id));
+
+
+  const addDetails = () =>
+    setMocktestRequests(prev => [
+      ...prev,
+      { id: Date.now(), marks: 5,numQuestions: 5, selected: true },
+    ]);
+
+  const updateDetails = (id, field, value) =>
+    setMocktestRequests(prev =>
+      prev.map(c => (c.id === id ? { ...c, [field]: value } : c))
+    );
+
+  const removeDetails = id =>
+    setMocktestRequests(prev => prev.filter(c => c.id !== id));
+
 
   // --- Helpers for multi-chapter ---
   const addChapter = () =>
@@ -358,12 +378,103 @@ export default function ExamGenerator({ user }) {
     }
   };
 
+  const downloadMockTestPaper = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      if (!user) {
+        setLoginPrompt(true);
+        return;
+      }
+
+      if (credits <= 0) {
+        throw new Error('You have no credits left. Please subscribe for ₹49/month.');
+      }
+
+      const ref = doc(db, 'users', user.uid);
+      await updateDoc(ref, { credits: credits - 1 });
+      setCredits(credits - 1);
+
+      if (subscriptionExpires && subscriptionExpires < new Date()) {
+        await updateDoc(ref, { credits: 0 });
+        setCredits(0);
+        throw new Error('Your subscription has expired.');
+      }
+
+      if (!syllabusFile) {
+        throw new Error('Please upload a syllabus PDF.');
+      }
+
+      const validRequests = mocktestRequests.filter(x => x.selected && x.numQuestions > 0 && x.marks > 0);
+      if (!validRequests.length) {
+        throw new Error('Please provide at least one valid mock test request with marks and questions.');
+      }
+
+      // Upload syllabus file
+      await handleUpload();
+
+      // Prepare payload with mocktestRequests
+      const payload = {
+        mocktestRequests: validRequests.map(r => ({
+          numQuestions: r.numQuestions,
+          marks: r.marks
+        }))
+      };
+
+      // Call export-mocktestpaper endpoint
+      const res = await fetch(`${API_URL}/api/export-mocktestpaper`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('API Error:', errorText);
+        throw new Error('PDF export failed: ' + errorText);
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'mocktestpaper.pdf';
+      a.click();
+    } catch (e) {
+      console.error('Download Mock Test Paper Error:', e);
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
   const Answergenerate = async () => {
     setAnswers([]);
     setLoadingAnswers(true);
 
     try {
       await handleUpload();
+
+      if (!user) {
+        setLoginPrompt(true);
+        return;
+      }
+
+      if (credits <= 0) {
+        throw new Error('You have no credits left. Please subscribe for ₹49/month.');
+        return;
+      }
+
+      const ref = doc(db, 'users', user.uid);
+      await updateDoc(ref, { credits: credits - 1 });
+      setCredits(credits - 1);
+
+      if (subscriptionExpires && subscriptionExpires < new Date()) {
+        await updateDoc(ref, { credits: 0 });
+        setCredits(0);
+        throw new Error('Your subscription has expired.');
+      }
 
       if (mode === 'multi') {
         if (syllabusmode === 'question') {
@@ -439,20 +550,20 @@ export default function ExamGenerator({ user }) {
           <div className="mb-5 text-center">
             <h5 className="mb-3 text-accent">Select Input Method</h5>
             <div className="d-flex flex-column flex-md-row justify-content-center gap-2">
-              {['paste', 'multi', 'questionPaper'].map(m => (
+              {['paste', 'multi', 'questionPaper', 'mocktestpaper'].map(m => (
                 <button
                   key={m}
                   className={`input-method-btn ${mode === m ? 'active' : 'btn-outline-primary'} w-100 w-md-auto`}
                   onClick={() => setMode(m)}
                 >
-                  {m === 'paste' ? 'Enter Your Text' : m === 'multi' ? 'Upload Syllabus' : 'Upload Question Paper'}
+                  {m === 'paste' ? 'Enter Your Text' : m === 'multi' ? 'Upload Syllabus' : m==='questionPaper' ? 'Upload Question Paper' : 'Mock Test Paper'}
                 </button>
               ))}
             </div>
           </div>
 
           {/* Question Type Dropdown and Number of Questions */}
-          {mode !== 'questionPaper' && (
+          {mode !== 'questionPaper' && mode !== 'mocktestpaper' && (
             <div className="mb-5 text-center">
               <h5 className="mb-3 text-accent">Select Question Type</h5>
               <div className="d-flex justify-content-center">
@@ -495,6 +606,80 @@ export default function ExamGenerator({ user }) {
                 onChange={e => setPasteText(e.target.value)}
               />
             </div>
+          )}
+
+          {mode === 'mocktestpaper' && (
+            <div className="mb-4">
+                <div className="mb-4">
+                  <label className="form-label text-accent">Upload Syllabus pdf/jpg/jpeg</label>
+                  <input
+                    type="file"
+                    accept=".pdf, .jpg, .jpeg"
+                    className="form-control"
+                    onChange={e => setSyllabusFile(e.target.files[0])}
+                  />
+                </div>
+
+                <table className="table table-bordered mb-3">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>marks</th>
+                        <th>#Q</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mocktestRequests.map(c => (
+                        <tr key={c.id}>
+                          <td className="text-center" style={{ width: '10%' }}>
+                            <input
+                              type="checkbox"
+                              className="form-check-input"
+                              checked={c.selected}
+                              onChange={e => updateDetails(c.id, 'selected', e.target.checked)}
+                            />
+                          </td>
+                          <td style={{ width: '30%' }}>
+                            <input
+                              type="number"
+                              className="form-control"
+                              value={c.marks}
+                              onChange={e => updateDetails(c.id, 'marks', e.target.value)}
+                            />
+                          </td>
+                          <td style={{ width: '30%' }}>
+                            <input
+                              type="number"
+                              className="form-control"
+                              value={c.numQuestions}
+                              onChange={e => updateDetails(c.id, 'numQuestions', e.target.value)}
+                            />
+                          </td>
+                          <td className="text-center" style={{ width: '10%' }}>
+                            <button
+                              className="btn btn-sm btn-outline-danger"
+                              onClick={() => removeDetails(c.id)}
+                            >
+                              ×
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+              <div className="d-flex gap-2 mb-4">
+                <button className="btn btn-sm btn-primary" onClick={addDetails}>
+                      + Add Details
+                </button>
+                <button className="btn btn-sm btn-success" onClick={downloadMockTestPaper}>
+                {loading ? 'Downloading...' : 'Download Mock Test Paper'}
+                </button>
+              </div>
+
+              </div>
+
           )}
 
           {/* Multiple Chapters */}
@@ -703,7 +888,7 @@ export default function ExamGenerator({ user }) {
 
           {/* Actions */}
           <div className="d-flex gap-2 mb-4">
-            {showGenerate && (
+            {showGenerate && mode !== 'mocktestpaper' && (
               <button className="btn btn-primary" onClick={generate} disabled={loading}>
                 {loading ? 'Generating...' : 'Generate Questions'}
               </button>

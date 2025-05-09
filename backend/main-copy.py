@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 import json
 import io
 import pdfkit
+import openai
 
 
 app = FastAPI()
