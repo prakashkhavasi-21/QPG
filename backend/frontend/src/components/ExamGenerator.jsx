@@ -42,8 +42,8 @@ export default function ExamGenerator({ user }) {
   ]);
 
   let nonMcqCounter = 1;
-  const API_URL = "http://localhost:8001";
-  //const API_URL = "https://www.qnagenai.com";
+  //const API_URL = "http://localhost:8001";
+  const API_URL = "https://www.qnagenai.com";
 
   // Reset prompt if user logs in
   useEffect(() => {
