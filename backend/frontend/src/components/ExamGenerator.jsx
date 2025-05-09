@@ -669,12 +669,14 @@ export default function ExamGenerator({ user }) {
                     </tbody>
                   </table>
 
-              <div className="d-flex gap-2 mb-4">
+              <div className="d-flex mb-4">
                 <button className="btn btn-sm btn-primary" onClick={addDetails}>
                       + Add Details
                 </button>
+              </div>
+              <div className="d-flex mb-4">
                 <button className="btn btn-sm btn-success" onClick={downloadMockTestPaper}>
-                {loading ? 'Downloading...' : 'Download Mock Test Paper'}
+                  {loading ? 'Downloading...' : 'Download Mock Test Paper'}
                 </button>
               </div>
 
