@@ -13,8 +13,8 @@ export default function Navbar({ user }) {
   const [loadingUserData, setLoadingUserData] = useState(false);
   const [userData, setUserData] = useState(null);
 
-  const API_URL = "http://localhost:8001";
-  //const API_URL = "https://www.qnagenai.com";
+  //const API_URL = "http://localhost:8001";
+  const API_URL = "https://www.qnagenai.com";
 
   const fetchUserData = async () => {
     if (auth.currentUser) {
