@@ -13,7 +13,8 @@ export default function Navbar({ user }) {
   const [loadingUserData, setLoadingUserData] = useState(false);
   const [userData, setUserData] = useState(null);
 
-  const API_URL = "https://www.qnagenai.com";
+  const API_URL = "http://localhost:8001";
+  //const API_URL = "https://www.qnagenai.com";
 
   const fetchUserData = async () => {
     if (auth.currentUser) {
@@ -120,8 +121,12 @@ export default function Navbar({ user }) {
     <>
       <nav className="navbar fixed-top shadow-sm">
         <div className="container-fluid d-flex justify-content-between align-items-center">
-          <Link to="/app" className="navbar-brand fw-bold">
+          {/* <Link to="/app" className="navbar-brand fw-bold">
             QnA genAi
+          </Link> */}
+          <Link to="/app" className="navbar-brand" style={{ fontFamily: "'Poppins', sans-serif", fontSize: '1.5rem' }}>
+            <span style={{ color: '#ffffff', fontWeight: 'bold' }}>QnA</span>
+            <span style={{ color: '#b3d4ff', fontWeight: 'normal', fontSize: '1.0rem' }}>genAi</span>
           </Link>
 
           <button
