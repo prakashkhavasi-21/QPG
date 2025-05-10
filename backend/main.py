@@ -448,6 +448,7 @@ async def generate_questions_by_chapter(payload: ChapterIn):
 
     system_prompt = f"""
         You are an expert question paper generator. Based on the following text,
+        Ensure all questions are distinct and do not repeat.
         If you need to add any commentary or preamble before the list of questions, that commentary **alone** may start with “A)”.
         generate {n} {types_str} question{'s' if n>1 else ''}:
 
